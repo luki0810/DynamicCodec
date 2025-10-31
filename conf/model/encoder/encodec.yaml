@@ -1,0 +1,19 @@
+d_in: 1
+encoder_rates: [2, 4, 8, 8]
+latent_dim: 128
+
+n_filters: 32
+n_residual_layers: 1
+activation: ELU
+activation_params: {'alpha': 1.0}
+norm: weight_norm
+# norm_params: {}
+kernel_size: 7
+last_kernel_size: 7
+residual_kernel_size: 3
+dilation_base: 2
+causal: False
+pad_mode: reflect
+true_skip: False
+compress: 2
+lstm: 2

@@ -1,0 +1,15 @@
+$include:
+  - conf/run.yaml
+  - conf/hyparams.yaml
+  - conf/model/encoder/&{encoder}.yaml
+  - conf/model/decoder/&{decoder}.yaml
+  - conf/model/quantizer/&{quantizer}.yaml
+
+
+encoder: encodec
+decoder: dac
+quantizer: bsq
+
+
+
+

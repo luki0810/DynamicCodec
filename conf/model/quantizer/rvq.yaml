@@ -1,0 +1,5 @@
+latent_dim: 128
+n_codebooks: 8
+codebook_size: 1024
+codebook_dim: 8
+quantizer_dropout: 0.0
