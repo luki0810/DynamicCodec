@@ -62,7 +62,6 @@ class VectorQuantize(AbsQuantizer):
         Tensor[B x D x T]
             Projected latents (continuous representation of input before quantization)
         """
-
         # Factorized codes (ViT-VQGAN) Project input into low-dimensional space
         z_e = self.in_proj(z)  # z_e : (B x D x T)
         z_q, indices = self.decode_latents(z_e)

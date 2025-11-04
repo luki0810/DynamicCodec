@@ -1,0 +1,16 @@
+{
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}"
+    ],
+    "python.envFile": "${workspaceFolder}/.env",
+    "editor.codeActionsOnSave": {
+
+    },
+    "python.terminal.useEnvFile": true,
+    "editor.fontSize": 15,
+    "workbench.colorTheme": "Tomorrow Night Blue",
+    "editor.aiStats.enabled": true,
+    "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
+    "editor.experimentalGpuAcceleration": "off",
+    "workbench.activityBar.iconClickBehavior": "toggle",
+}

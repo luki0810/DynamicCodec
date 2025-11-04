@@ -4,13 +4,34 @@ import argbind
 import sys
 from pathlib import Path
 import os
+from audiotools import AudioSignal
+import soundfile
 
+from model.ssl.repr import ssl_model
 from model.utils.util import to_scalar, pretty_shape
 from model.build import DynamicTask
 from model.utils.dynamic_argbind_loader import load_config_for_argbind
 
+def out_print(model, out):
+    # output result
+    print("\n=== DynamicCodec Test Run ===")
+    print(f"device           : {model.device}")
+    print(f"sample_rate      : {model.sample_rate}")
+    if hasattr(model, 'hop_length'):
+        print(f"hop_length       : {model.hop_length}")
+    if hasattr(model, 'latent_dim'):
+        print(f"latent_dim       : {model.latent_dim}")
 
 
+    print(pretty_shape("recon audio", out.get("audio")))
+    print(pretty_shape("z", out.get("z")))
+    print(pretty_shape("codes", out.get("codes")))
+    print(pretty_shape("latents", out.get("latents")))
+    
+    loss_dict = out["loss"]
+    for name, value in loss_dict.items():
+        print(pretty_shape(name, value))
+    print("===========================\n")
 
 def _dump_args(args, save_path):
     if save_path.exists():
@@ -21,11 +42,12 @@ def _dump_args(args, save_path):
             print(f"[WARN] Could not remove {save_path}: {e}")      
     argbind.dump_args(args, save_path)
 
+
+
 @argbind.bind(without_prefix=True)
 def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yaml"):
     # dynamic load with ${encoder}, ${decoder}, ${quantizer}
     # 这里的dynamic load相当于全部载入，不会检查argbind.unknown
-    
     cfg = load_config_for_argbind(main_yaml=load_path)
     args = argbind.parse_args(argv=sys.argv)
     args.update(cfg)
@@ -45,45 +67,54 @@ def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yam
         print(f"{k}: {v}")
     print("------------------------")
 
+
+    # args
+    sample_rate = args["sample_rate"]
+    device = args["device"]
+
     # dynamice bind operation
     with argbind.scope(args):
         model = DynamicTask.build_model()
-
-    # to device
-    device = torch.device("cuda" if (args['device'] == "cuda" and torch.cuda.is_available()) else "cpu")
-    model.to(device).eval()
-
-    # dummy data
-    sr = args['sample_rate']
-    T = int(sr * args['duration_sec'])
-    B = args['batch_size']
-    dummy = torch.randn(B, 1, T, device=device)
-
-
-    # inference
-    with torch.no_grad():
-        out = model(dummy, sample_rate=sr)
-
-
-    # output result
-    print("\n=== DynamicCodec Test Run ===")
-    print(f"device           : {device}")
-    print(f"sample_rate      : {sr}")
-    if hasattr(model, 'hop_length'):
-        print(f"hop_length       : {model.hop_length}")
-    if hasattr(model, 'latent_dim'):
-        print(f"latent_dim       : {model.latent_dim}")
-
-    print(pretty_shape("input audio", dummy))
-    print(pretty_shape("recon audio", out.get("audio")))
-    print(pretty_shape("z", out.get("z")))
-    print(pretty_shape("codes", out.get("codes")))
-    print(pretty_shape("latents", out.get("latents")))
+        model.to(device)
+        
+    #input file
+    fname = 'wav_file/input_wav/p226_002.wav'
     
-    loss_dict = out["loss"]
-    for name, value in loss_dict.items():
-        print(pretty_shape(name, value))
-    print("===========================\n")
+    # input_format
+    input_format = args['input_format']
+    if input_format == 'repr':
+        # get_ssl_model
+        with argbind.scope(args):
+            reader = ssl_model()
+        # inference ssl
+        frames = soundfile.info(fname).frames
+        feat = reader.get_feats(fname, frames)
+        feat = feat.unsqueeze(0)
+        feat = feat.transpose(1, 2).to(device)
+        # inference other
+        model.eval()
+        with torch.no_grad():
+            out = model(feat)
+        
+
+        
+    elif input_format == 'melspec':
+        pass
+        # TODO: melspectrogram to code to waveform
+        
+    elif input_format == 'wav':
+        model.to(device)
+        # input
+        signal = AudioSignal(fname)
+        signal = signal.to_mono()
+        signal.to(model.device)
+        model.eval()
+        with torch.no_grad():
+            out = model(signal.audio_data, signal.sample_rate)
+    
+        
+    # output    
+    out_print(model, out)
 
 
 if __name__ == "__main__":

@@ -22,7 +22,8 @@ from class_choice.types import float_or_none, int_or_none, str2bool, str_or_none
 def init_weights(m):
     if isinstance(m, nn.Conv1d):
         nn.init.trunc_normal_(m.weight, std=0.02)
-        nn.init.constant_(m.bias, 0)
+        if getattr(m, "bias", None) is not None:
+            nn.init.constant_(m.bias, 0)
         
       
 @argbind.bind(without_prefix=True)
@@ -66,7 +67,7 @@ class DynamicCodec(AbsConvCodec):
         if sample_rate is None:
             sample_rate = self.sample_rate
         assert sample_rate == self.sample_rate
-
+            
         # down-sample & up-sample | guaranteed effective recovery
         length = audio_data.shape[-1]
         right_pad = math.ceil(length / self.hop_length) * self.hop_length - length
@@ -92,7 +93,6 @@ class DynamicCodec(AbsConvCodec):
     ):
         length = audio_data.shape[-1]
         audio_data = self.preprocess(audio_data, sample_rate)
-
 
         z, codes, latents, loss_dict, other = self.encode(
             audio_data

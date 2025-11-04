@@ -1,9 +1,3 @@
-activation: ELU
-
-activation_params:
-
-  alpha: 1.0
-
 args.debug: 1
 args.load: null
 args.save: null
@@ -11,17 +5,21 @@ args.unknown: []
 
 batch_size: 1
 
-beta: 0.0
+bias: true
 
-causal: false
+block_dilations:
+- 1
+- 1
 
-cb_entropy_compute: group
+channel_ratios:
+- 1
+- 1
 
-codebook_dim: 14
+code_dim: 128
 
-compress: 2
+codebook_dim: 8
 
-d_in: 1
+codebook_size: 1024
 
 d_out: 1
 
@@ -35,13 +33,11 @@ decoder_rates:
 - 4
 - 2
 
-device: cuda
+device: cuda:6
 
-dilation_base: 2
+encode_channels: 1024
 
-duration_sec: 3.0
-
-encoder: encodec
+encoder: repcodec
 
 encoder_rates:
 - 2
@@ -49,41 +45,21 @@ encoder_rates:
 - 8
 - 8
 
-gamma: 1.0
+input_channels: 1024
 
-gamma0: 1.0
+input_format: repr
 
-group_size: 1
-
-input_format: bdt
-
-inv_temperature: 1
-
-kernel_size: 7
-
-l2_norm: true
-
-last_kernel_size: 7
+kernel_size: 3
 
 latent_dim: 128
 
 load_path: conf/base.yaml
 
-lstm: 2
+manifest.dataset_path: wav_file/input_wav
 
-n_filters: 32
+n_codebooks: 1
 
-n_residual_layers: 1
-
-norm: weight_norm
-
-pad_mode: reflect
-
-persample_entropy_compute: group
-
-quantizer: bsq
-
-residual_kernel_size: 3
+quantizer: vq
 
 sample_rate: 48000
 
@@ -91,9 +67,16 @@ save_path: runs/test/args.yaml
 
 seed: 42
 
-soft_entropy: true
+ssl_model.ckpt_path: /mnt/speech/luyongkang/models/hubert/hubert_large_ll60k.pt
+ssl_model.device: cuda
+ssl_model.layer: 18
+ssl_model.max_chunk: 1600000
+ssl_model.model_type: hubert
+ssl_model.use_cpu: false
 
-true_skip: false
+strides:
+- 1
+- 1
 
-zeta: 1.0
+unit_kernel_size: 3
 

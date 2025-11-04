@@ -1,0 +1,9 @@
+input_channels: 1024
+encode_channels: 1024
+code_dim: 128
+channel_ratios: [1, 1]
+strides: [1, 1]
+kernel_size: 3
+bias: True
+block_dilations: [1, 1]
+unit_kernel_size: 3

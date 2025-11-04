@@ -1,15 +1,28 @@
 $include:
   - conf/run.yaml
-  - conf/hyparams.yaml
   - conf/model/encoder/&{encoder}.yaml
   - conf/model/decoder/&{decoder}.yaml
   - conf/model/quantizer/&{quantizer}.yaml
+  - conf/input_format/&{input_format}.yaml
 
 
-encoder: encodec
+
+# model component
+input_format: repr
+encoder: repcodec
 decoder: dac
-quantizer: bsq
+quantizer: vq
 
 
+# model config
+sample_rate: 48000
+
+# inference/train config
+seed: 42
+device: cuda:6
+batch_size: 1
+
+# ssl dataset_path
+manifest.dataset_path: wav_file/input_wav
 
 
