@@ -1,3 +1,5 @@
-ssl_model.model_type: hubert
-ssl_model.ckpt_path: /mnt/speech/luyongkang/models/hubert/hubert_large_ll60k.pt
-ssl_model.layer: 18
+$include:
+  - conf/input_format/ssl_model/&{ssl_model_type}.yaml
+
+# support hubert, whisper, data2vec
+ssl_model_type: data2vec

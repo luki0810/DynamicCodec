@@ -1,0 +1,11 @@
+# Discriminator
+Discriminator.sample_rate: 48000
+Discriminator.rates: [1, 2, 4]
+Discriminator.periods: [2, 3, 5, 7, 11]
+Discriminator.fft_sizes: [2048, 1024, 512]
+Discriminator.bands:
+  - [0.0, 0.1]
+  - [0.1, 0.25]
+  - [0.25, 0.5]
+  - [0.5, 0.75]
+  - [0.75, 1.0]

@@ -1,0 +1,5 @@
+# Optimization
+# w/o namespace, for all Adam
+AdamW.betas: [0.8, 0.99]
+AdamW.lr: 0.0001
+ExponentialLR.gamma: 0.999996

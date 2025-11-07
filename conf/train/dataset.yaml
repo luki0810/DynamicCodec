@@ -1,0 +1,41 @@
+# Transforms
+build_transform.augment_prob: 0.0
+build_transform.preprocess:
+  - Identity
+build_transform.augment:
+  - Identity
+build_transform.postprocess:
+  - VolumeNorm
+  - RescaleAudio
+  - ShiftPhase
+
+VolumeNorm.db: [const, -16]
+
+# dataset folder
+train/build_dataset.folders:
+  VCTK:
+    - /mnt/speech/luyongkang/datasets/VCTK/all_wav_48/train
+
+val/build_dataset.folders:
+  VCTK:
+    - /mnt/speech/luyongkang/datasets/VCTK/all_wav_48/val
+
+test/build_dataset.folders:
+  VCTK:
+    - /mnt/speech/luyongkang/datasets/VCTK/all_wav_48/test
+
+
+# Data
+train/AudioDataset.duration: 0.38
+train/AudioDataset.n_examples: 10000000
+
+val/AudioDataset.duration: 5.0
+val/build_transform.augment_prob: 1.0
+val/AudioDataset.n_examples: 250
+
+test/AudioDataset.duration: 10.0
+test/build_transform.augment_prob: 1.0
+test/AudioDataset.n_examples: 1000
+
+AudioLoader.shuffle: true
+AudioDataset.without_replacement: true

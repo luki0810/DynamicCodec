@@ -1,0 +1,4 @@
+# hubert
+ssl_model.model_type: hubert
+ssl_model.ckpt_path: ckpt/hubert/hubert_large_ll60k.pt
+ssl_model.layer: 18

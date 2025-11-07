@@ -43,15 +43,15 @@ def _dump_args(args, save_path):
     argbind.dump_args(args, save_path)
 
 
-
 @argbind.bind(without_prefix=True)
-def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yaml"):
+def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test"):
     # dynamic load with ${encoder}, ${decoder}, ${quantizer}
     # 这里的dynamic load相当于全部载入，不会检查argbind.unknown
     cfg = load_config_for_argbind(main_yaml=load_path)
     args = argbind.parse_args(argv=sys.argv)
     args.update(cfg)
-    _dump_args(args=args, save_path=Path(save_path))
+    argpath = Path(save_path)/ "args.yaml"
+    _dump_args(args=args, save_path=argpath)
 
     
     # seed
@@ -78,7 +78,7 @@ def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yam
         model.to(device)
         
     #input file
-    fname = 'wav_file/input_wav/test_48k.wav'
+    fname = 'wav_file/input_wav/p226_002.wav'
     
     # input_format
     input_format = args['input_format']
@@ -100,7 +100,7 @@ def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yam
         model.to(device)
         # input
         signal = AudioSignal(fname)
-        signal = signal.to_mono()
+        signal = signal.to_mono() # to single
         signal.to(model.device)
         model.eval()
         with torch.no_grad():
@@ -114,6 +114,8 @@ def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yam
         
     # output    
     out_print(model, out)
+    
+    
 
 
 if __name__ == "__main__":

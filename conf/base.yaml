@@ -1,23 +1,18 @@
 $include:
-  - conf/run.yaml
+  - conf/&{state}.yaml
+  - conf/input_format/&{input_format}.yaml
   - conf/model/encoder/&{encoder}.yaml
   - conf/model/decoder/&{decoder}.yaml
   - conf/model/quantizer/&{quantizer}.yaml
-  - conf/input_format/&{input_format}.yaml
+
 
 
 
 # model component
+state: train
 input_format: wav # repr/wav/melspec
-encoder: encodec
+encoder: dac
 decoder: dac
-quantizer: bsq
+quantizer: rvq
 
 
-# model config
-sample_rate: 48000
-
-# inference/train config
-seed: 42
-device: cuda:6
-batch_size: 1

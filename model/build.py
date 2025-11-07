@@ -47,7 +47,7 @@ class DynamicCodec(AbsConvCodec):
 
         # --- module check ---
         if encoder is None or quantizer is None or decoder is None:
-            raise ValueError("encoder/quantizer/decoder === None, please check it")
+            raise ValueError("encoder/quantizer/decoder is None, please check it")
         self.encoder = encoder
         self.quantizer = quantizer
         self.decoder = decoder
@@ -139,11 +139,11 @@ class DynamicTask:
             quantizer=qtz,
             decoder=dec,
         )
-        print("=========== build model successfully ===========")
-        print("encoder: ", encoder)
-        print("quantizer: ",quantizer)
-        print("decoder: ", decoder)
-        print("================================================")
+        # print("=========== build model successfully ===========")
+        # print("encoder: ", encoder)
+        # print("quantizer: ",quantizer)
+        # print("decoder: ", decoder)
+        # print("================================================")
         return model
 
 

@@ -1,0 +1,46 @@
+$include:
+  - conf/train/adam.yaml
+  - conf/train/dataset.yaml
+  - conf/train/discriminator.yaml
+  - conf/train/loss.yaml
+
+
+
+# train.py def load()
+# without_prefix = false
+load.resume: false
+load.tag: latest
+load.only_load_weights: true
+
+
+# train.py def train()
+# without_prefix = true
+seed: 42
+sample_rate: 48000
+num_iters: 250000
+save_iters: [10000, 50000, 100000, 200000]
+sample_freq: 10000
+valid_freq: 1000
+batch_size: 12
+val_batch_size: 12
+num_workers: 8
+val_idx: [0, 1, 2, 3, 4, 5, 6, 7]
+lambdas: 
+  mel/loss: 100.0
+  waveform/loss: 1.0
+  # stft/loss: 1.0
+  commitment_loss: 0.25
+  codebook_loss: 1.0 # for rvq and vq
+  entropy_penalty: 1.0 # for bsq
+  adv/feat_loss: 2.0
+  adv/gen_loss": 1.0
+
+  
+# Accelerator
+Accelerator.amp: true
+Accelerator.find_unused_parameters: true
+
+
+
+
+

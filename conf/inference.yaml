@@ -1,0 +1,7 @@
+# model config
+sample_rate: 48000
+
+# global args
+seed: 42
+device: cuda:6
+batch_size: 1

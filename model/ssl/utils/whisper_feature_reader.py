@@ -10,6 +10,7 @@ import io
 import logging
 import os
 from typing import Optional, Union
+import torchaudio
 
 import soundfile as sf
 import torch
@@ -17,7 +18,7 @@ from whisper import _MODELS, _download, _ALIGNMENT_HEADS, available_models
 from whisper.audio import log_mel_spectrogram
 from whisper.model import ModelDimensions
 
-from whisper.model import Whisper
+from model.ssl.utils.whisper_model import Whisper_
 
 logger = logging.getLogger("dump_feature")
 
@@ -27,7 +28,7 @@ def load_model(
         device: Optional[Union[str, torch.device]] = None,
         download_root: str = None,
         in_memory: bool = False,
-) -> Whisper:
+) -> Whisper_:
     """
     Reference: https://github.com/openai/whisper/blob/main/whisper/__init__.py#L97
     But we will load a `Whisper_` model for feature extraction.
@@ -74,7 +75,7 @@ def load_model(
     del checkpoint_file
 
     dims = ModelDimensions(**checkpoint["dims"])
-    model = Whisper(dims)
+    model = Whisper_(dims)
     model.load_state_dict(checkpoint["model_state_dict"])
 
     if alignment_heads is not None:
@@ -88,13 +89,20 @@ class WhisperFeatureReader(object):
         self.device = device
         logger.info(f"device = {self.device}")
 
-        self.model: Whisper = load_model(name=ckpt, device=self.device, download_root=root).eval()
+        self.model: Whisper_ = load_model(name=ckpt, device=self.device, download_root=root).eval()
         self.model.decoder = None  # to save some memory by deleting the decoder
         self.layer = layer  # one-based
 
     def read_audio(self, path, ref_len=None):
         wav, sample_rate = sf.read(path)
-        assert sample_rate == 16000, sample_rate
+        
+        if sample_rate != 16000:
+            logger.info(f"Resampling from {sample_rate} Hz → 16000 Hz for {path}")
+            wav_torch = torch.from_numpy(wav).float().unsqueeze(0)
+            wav_torch = torchaudio.functional.resample(wav_torch, sample_rate, 16000)
+            wav = wav_torch.squeeze().numpy()
+            sample_rate = 16000
+        
         if ref_len is not None and abs(ref_len - len(wav)) > 160:
             logger.warning(f"ref {ref_len} != read {len(wav)} ({path})")
         return wav

@@ -1,0 +1,4 @@
+# hubert
+ssl_model.model_type: data2vec
+ssl_model.ckpt_path: ckpt/data2vec/base_no_ft.pt
+ssl_model.layer: 6

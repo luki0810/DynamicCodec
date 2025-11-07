@@ -1,0 +1,5 @@
+# whisper input should be 16kHz
+ssl_model.model_type: whisper
+ssl_model.whisper_root: ckpt/whisper
+ssl_model.whisper_name: medium
+ssl_model.layer: 24
