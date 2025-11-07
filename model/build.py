@@ -13,9 +13,9 @@ from model.utils.abs_class import AbsConvCodec
 from model.all_choices import encoder_choices, decoder_choices, quantizer_choices
 
 
-from class_choice.get_default_kwargs import get_default_kwargs
-from class_choice.nested_dict_action import NestedDictAction
-from class_choice.types import float_or_none, int_or_none, str2bool, str_or_none
+from model.utils.class_choice.get_default_kwargs import get_default_kwargs
+from model.utils.class_choice.nested_dict_action import NestedDictAction
+from model.utils.class_choice.types import float_or_none, int_or_none, str2bool, str_or_none
 
 
 

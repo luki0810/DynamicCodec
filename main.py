@@ -78,7 +78,7 @@ def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yam
         model.to(device)
         
     #input file
-    fname = 'wav_file/input_wav/p226_002.wav'
+    fname = 'wav_file/input_wav/test_48k.wav'
     
     # input_format
     input_format = args['input_format']
@@ -96,12 +96,6 @@ def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yam
         with torch.no_grad():
             out = model(feat)
         
-
-        
-    elif input_format == 'melspec':
-        pass
-        # TODO: melspectrogram to code to waveform
-        
     elif input_format == 'wav':
         model.to(device)
         # input
@@ -111,7 +105,12 @@ def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test/args.yam
         model.eval()
         with torch.no_grad():
             out = model(signal.audio_data, signal.sample_rate)
-    
+            
+            
+    elif input_format == 'melspec':
+        pass
+        # TODO: melspectrogram to code to waveform
+
         
     # output    
     out_print(model, out)

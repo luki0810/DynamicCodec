@@ -8,10 +8,10 @@ $include:
 
 
 # model component
-input_format: repr
-encoder: repcodec
+input_format: wav # repr/wav/melspec
+encoder: encodec
 decoder: dac
-quantizer: vq
+quantizer: bsq
 
 
 # model config
@@ -21,8 +21,3 @@ sample_rate: 48000
 seed: 42
 device: cuda:6
 batch_size: 1
-
-# ssl dataset_path
-manifest.dataset_path: wav_file/input_wav
-
-

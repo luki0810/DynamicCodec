@@ -49,13 +49,14 @@ class _EncoderBlock(nn.Module):
 class Encoder(AbsEncoder):
     def __init__(
         self,
+        d_in: int = 1,
         encoder_dim: int = 64,
         encoder_rates: list = [2, 4, 8, 8],
         latent_dim: int = 64,
     ):
         super().__init__()
         # Create first convolution
-        self.block = [WNConv1d(1, encoder_dim, kernel_size=7, padding=3)]
+        self.block = [WNConv1d(d_in, encoder_dim, kernel_size=7, padding=3)]
 
         # Create EncoderBlocks that double channels as they downsample by `stride`
         for stride in encoder_rates:

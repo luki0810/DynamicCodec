@@ -1,4 +1,4 @@
-from class_choice.class_choices import ClassChoices
+from model.utils.class_choice.class_choices import ClassChoices
 
 # module import
 from model.quantizer.quantize import ResidualVectorQuantize, VectorQuantize

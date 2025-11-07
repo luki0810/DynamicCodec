@@ -20,8 +20,7 @@ def ssl_model(
     device = "cpu" if use_cpu else device
     reader = None
     if model_type == "hubert":
-        reader = HubertFeatureReader(ckpt_path, layer, device=device, max_chunk=max_chunk)
-        
+        reader = HubertFeatureReader(ckpt_path, layer, device=device, max_chunk=max_chunk) 
     return reader
 
 def dump(reader, fname: str = "path/to/wav"):
