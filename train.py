@@ -514,7 +514,10 @@ def train(
 
 
 @argbind.bind(without_prefix=True)
-def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test"):
+def main(load_path: str = None, save_path: str = None):
+    cli = argbind.parse_args(argv=sys.argv)
+    load_path = cli.get("load_path", load_path)
+    save_path = cli.get("save_path", save_path)
     cfg = load_config_for_argbind(main_yaml=load_path)
     args = argbind.parse_args(argv=sys.argv)
     args.update(cfg)

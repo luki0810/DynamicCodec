@@ -1,16 +1,26 @@
 export PYTHONPATH="$PWD:$PYTHONPATH"
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 python main.py \
 --load_path conf/base.yaml \
---save_path runs/test \
+--save_path runs/inference \
 --args.debug 1
 
+
+
+
+export CUDA_VISIBLE_DEVICES=0
+python train.py \
+--load_path conf/base.yaml \
+--save_path runs/dac+dac/ \
+--args.debug 1
 
 
 
 export CUDA_VISIBLE_DEVICES=7
 python train.py \
 --load_path conf/base.yaml \
---save_path runs/test/ \
+--save_path runs/encodec+dac/ \
 --args.debug 1
 
 

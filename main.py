@@ -42,11 +42,13 @@ def _dump_args(args, save_path):
             print(f"[WARN] Could not remove {save_path}: {e}")      
     argbind.dump_args(args, save_path)
 
-
 @argbind.bind(without_prefix=True)
-def main(load_path: str = "conf/base.yaml", save_path: str = "runs/test"):
+def main(load_path: str = None, save_path: str = None):
     # dynamic load with ${encoder}, ${decoder}, ${quantizer}
     # 这里的dynamic load相当于全部载入，不会检查argbind.unknown
+    cli = argbind.parse_args(argv=sys.argv)
+    load_path = cli.get("load_path", load_path)
+    save_path = cli.get("save_path", save_path)
     cfg = load_config_for_argbind(main_yaml=load_path)
     args = argbind.parse_args(argv=sys.argv)
     args.update(cfg)

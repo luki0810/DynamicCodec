@@ -3,5 +3,5 @@ sample_rate: 48000
 
 # global args
 seed: 42
-device: cuda:6
+device: cuda:7
 batch_size: 1
