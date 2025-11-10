@@ -7,7 +7,7 @@
 
     },
     "python.terminal.useEnvFile": true,
-    "editor.fontSize": 15,
+    "editor.fontSize": 14,
     "workbench.colorTheme": "Tomorrow Night Blue",
     "editor.aiStats.enabled": true,
     "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
