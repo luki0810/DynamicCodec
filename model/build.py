@@ -145,6 +145,10 @@ class DynamicTask:
         # print("decoder: ", decoder)
         # print("================================================")
         return model
+    
+    @classmethod
+    def load_from_folder(cls, **kwargs):
+        return DynamicCodec.load_from_folder(**kwargs)
 
 
 if __name__ == "__main__":

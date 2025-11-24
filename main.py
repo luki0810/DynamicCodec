@@ -74,13 +74,34 @@ def main(load_path: str = None, save_path: str = None):
     sample_rate = args["sample_rate"]
     device = args["device"]
 
-    # dynamice bind operation
-    with argbind.scope(args):
-        model = DynamicTask.build_model()
-        model.to(device)
+    
+
+        
+    # resume load
+    if args.get('resume', False):
+        exp_name = args.get('exp_name', None)
+        pr_path = os.path.dirname(save_path)
+        tag = args.get('tag', 'best')
+        kwargs = {
+            "folder": f"{pr_path}/{exp_name}/{tag}",
+            "map_location": "cpu",
+            "package": False
+            # package === load full training state
+        }
+        if (Path(kwargs["folder"]) / "dynamiccodec").exists():
+            model, model_extra = DynamicTask.load_from_folder(**kwargs)    
+        print(f"[INFO] Loaded model from {kwargs['folder']}")
+    else:
+        # dynamice build
+        print("[WARN] No resume load specified, using randomly initialized model.")
+        with argbind.scope(args):
+            model = DynamicTask.build_model()
+    model.to(device)
+        
         
     #input file
     fname = 'wav_file/input_wav/p226_002.wav'
+    
     
     # input_format
     input_format = args['input_format']
@@ -116,6 +137,10 @@ def main(load_path: str = None, save_path: str = None):
         
     # output    
     out_print(model, out)
+    # save output audio
+    recon_audio = out["audio"].squeeze().cpu().numpy()
+    soundfile.write(Path(save_path)/ "recon.wav", recon_audio, sample_rate)
+    print(f"[INFO] Saved reconstructed audio to {Path(save_path)/ 'recon.wav'}")
     
     
 

@@ -19,13 +19,13 @@ def ssl_model(
     device = "cpu" if use_cpu else device
     reader = None
     if model_type == "hubert":
-        from model.ssl.utils.hubert_feature_reader import HubertFeatureReader
+        from data.ssl.utils.hubert_feature_reader import HubertFeatureReader
         reader = HubertFeatureReader(ckpt_path, layer, device=device, max_chunk=max_chunk)
     elif model_type == "data2vec":
-        from model.ssl.utils.data2vec_feature_reader import Data2vecFeatureReader
+        from data.ssl.utils.data2vec_feature_reader import Data2vecFeatureReader
         reader = Data2vecFeatureReader(ckpt_path, layer, device=device, max_chunk=max_chunk)
     elif model_type == "whisper":
-        from model.ssl.utils.whisper_feature_reader import WhisperFeatureReader
+        from data.ssl.utils.whisper_feature_reader import WhisperFeatureReader
         reader = WhisperFeatureReader(whisper_root, whisper_name, layer, device=device)
     return reader
 

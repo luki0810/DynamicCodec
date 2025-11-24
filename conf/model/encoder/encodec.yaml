@@ -1,6 +1,5 @@
 d_in: 1
 encoder_rates: [2, 4, 8, 8]
-latent_dim: 128
 
 n_filters: 32
 n_residual_layers: 1

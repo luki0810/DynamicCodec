@@ -101,3 +101,29 @@ class MelSpectrogram(nn.Module):
         spec = spectral_normalize_torch(spec)
 
         return spec
+
+
+
+if __name__ == "__main__":
+    # 初始化梅尔频谱提取器
+    mel_fn = MelSpectrogram(
+        n_fft=1024,
+        num_mels=80,
+        sampling_rate=44100,
+        hop_size=256,
+        win_size=1024,
+        fmin=0,
+        fmax=8000
+    )
+
+    # 示例1：处理单个音频
+    audio, sr = sf.read("/mnt/speech/luyongkang/DynamicCodec/wav_file/input_wav/p226_002.wav")  # 读取音频
+    audio_tensor = torch.FloatTensor(audio).unsqueeze(0)  # 添加batch维度
+    mel_spec = mel_fn(audio_tensor)  # 提取梅尔频谱
+    print(f"输入形状: {audio_tensor.shape}")  # torch.Size([1, 音频长度])
+    print(f"输出形状: {mel_spec.shape}")     # torch.Size([1, 80, 时间帧数])
+
+    # 示例2：处理批量音频
+    batch_audio = torch.randn(4, 44100)  # 4个1秒音频(44.10kHz)
+    batch_mel = mel_fn(batch_audio)
+    print(f"批量输出形状: {batch_mel.shape}") 

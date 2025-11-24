@@ -1,4 +1,3 @@
-latent_dim: 128
 decoder_dim: 1536
 decoder_rates: [8, 8, 4, 2]
 d_out: 1

@@ -239,8 +239,8 @@ def train_loop(state, batch, accel, lambdas):
             batch["signal"].clone(), **batch["transform_args"]
         )
 
-    for p in state.discriminator.parameters():
-        p.requires_grad_(True)
+    # for p in state.discriminator.parameters():
+    #     p.requires_grad_(True)
 
     with accel.autocast():
         out = state.generator(signal.audio_data, signal.sample_rate)
@@ -261,9 +261,7 @@ def train_loop(state, batch, accel, lambdas):
     accel.step(state.optimizer_d)
     state.scheduler_d.step()
 
-
-    for p in state.discriminator.parameters():
-        p.requires_grad_(False)
+    
     
     with accel.autocast():
         output["stft/loss"] = state.stft_loss(recons, signal)

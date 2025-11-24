@@ -18,7 +18,7 @@ from whisper import _MODELS, _download, _ALIGNMENT_HEADS, available_models
 from whisper.audio import log_mel_spectrogram
 from whisper.model import ModelDimensions
 
-from model.ssl.utils.whisper_model import Whisper_
+from data.ssl.utils.whisper_model import Whisper_
 
 logger = logging.getLogger("dump_feature")
 

@@ -9,10 +9,17 @@ python main.py \
 
 
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 python train.py \
 --load_path conf/base.yaml \
 --save_path runs/dac+dac/ \
+--args.debug 1
+
+
+export CUDA_VISIBLE_DEVICES=7
+python train.py \
+--load_path conf/base.yaml \
+--save_path runs/encodec+dac/ \
 --args.debug 1
 
 
@@ -20,7 +27,7 @@ python train.py \
 export CUDA_VISIBLE_DEVICES=7
 python train.py \
 --load_path conf/base.yaml \
---save_path runs/encodec+dac/ \
+--save_path runs/test/ \
 --args.debug 1
 
 

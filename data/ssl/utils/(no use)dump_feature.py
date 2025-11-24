@@ -8,10 +8,10 @@
 import logging
 import os
 import sys
-from model.ssl.utils.hubert_feature_reader import HubertFeatureReader
-from model.ssl.utils.data2vec_feature_reader import Data2vecFeatureReader
-from model.ssl.utils.whisper_feature_reader import WhisperFeatureReader
-from model.ssl.utils.feature_utils import get_path_iterator, dump_feature
+from data.ssl.utils.hubert_feature_reader import HubertFeatureReader
+from data.ssl.utils.data2vec_feature_reader import Data2vecFeatureReader
+from data.ssl.utils.whisper_feature_reader import WhisperFeatureReader
+from data.ssl.utils.feature_utils import get_path_iterator, dump_feature
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
