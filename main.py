@@ -7,7 +7,7 @@ import os
 from audiotools import AudioSignal
 import soundfile
 
-from model.ssl.repr import ssl_model
+from data.ssl.repr import ssl_model
 from model.utils.util import to_scalar, pretty_shape
 from model.build import DynamicTask
 from model.utils.dynamic_argbind_loader import load_config_for_argbind

@@ -1,12 +1,11 @@
 export PYTHONPATH="$PWD:$PYTHONPATH"
 
+# inference
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 python main.py \
 --load_path conf/base.yaml \
 --save_path runs/inference \
 --args.debug 1
-
-
 
 
 export CUDA_VISIBLE_DEVICES=1
@@ -30,6 +29,10 @@ python train.py \
 --save_path runs/test/ \
 --args.debug 1
 
+
+# gan trainer
+export CUDA_VISIBLE_DEVICES=0
+python trainer/GANTrainer.py --load_path conf/base.yaml --save_path runs/test --args.debug 1
 
 
 

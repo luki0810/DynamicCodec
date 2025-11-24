@@ -9,15 +9,8 @@ $include:
 
 
 # model component
-state: train # train/inference
-input_format: repr # repr/wav/melspec
-encoder: encodec
+state: inference # train/inference
+input_format: wav # repr/wav/melspec
+encoder: dac
 decoder: dac
 quantizer: rvq
-
-
-# resume: true  # path to checkpoint to resume training from
-# exp_name: encodec+dac
-# tag: best
-
-
