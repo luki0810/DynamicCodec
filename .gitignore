@@ -1,3 +1,5 @@
-ckpt
-runs
-zBigCodec
+ckpt/
+runs/
+.vscode
+.env
+__pycache__/
