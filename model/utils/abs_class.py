@@ -19,3 +19,6 @@ class AbsConvCodec(BaseModel, CodecMixin):
 
 class AbsDiscriminator(BaseModel):
     pass
+
+class AbsVocoder(nn.Module):
+    pass

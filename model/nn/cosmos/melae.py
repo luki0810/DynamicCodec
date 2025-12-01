@@ -1,136 +1,248 @@
+from model.nn.dac.layers import Snake1d
+from model.nn.dac.layers import WNConv1d, WNConvTranspose1d
+from model.utils.abs_class import AbsEncoder, AbsDecoder
+
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from model.quantizer.quantize import VectorQuantize
+from torch import nn
+import math
+
+class _ResidualUnit(nn.Module):
+    def __init__(self, dim: int = 16, dilation: int = 1):
+        super().__init__()
+        pad = ((7 - 1) * dilation) // 2
+        self.block = nn.Sequential(
+            Snake1d(dim),
+            WNConv1d(dim, dim, kernel_size=7, dilation=dilation, padding=pad),
+            Snake1d(dim),
+            WNConv1d(dim, dim, kernel_size=1),
+        )
+
+    def forward(self, x):
+        y = self.block(x)
+        pad = (x.shape[-1] - y.shape[-1]) // 2
+        if pad > 0:
+            x = x[..., pad:-pad]
+        return x + y
+    
+    
+class _EncoderBlock(nn.Module):
+    def __init__(self, dim: int = 16, stride: int = 1):
+        super().__init__()
+        self.block = nn.Sequential(
+            _ResidualUnit(dim // 2, dilation=1),
+            _ResidualUnit(dim // 2, dilation=3),
+            _ResidualUnit(dim // 2, dilation=9),
+            Snake1d(dim // 2),
+            WNConv1d(
+                dim // 2,
+                dim,
+                kernel_size=2 * stride,
+                stride=stride,
+                padding=math.ceil(stride / 2),
+            ),
+        )
+
+    def forward(self, x):
+        return self.block(x)
 
 
-class MelEncoder(nn.Module):
+
+
+class MelEncoder(AbsEncoder):
     """
-    Mel 编码器：输入 Mel 频谱 (B, n_mels, T) -> 潜在表示 (B, latent_dim, T')
-    T' 约为 T / (2 ** num_downsamples)
+    DAC 风格的 Mel 编码器：
+    输入 mel: (B, n_mels, T)
+    输出 latent: (B, latent_dim, T')
+    其中 T' = T / prod(encoder_rates)（四舍五入）
     """
     def __init__(
         self,
         n_mels: int = 100,
-        hidden_channels=(256, 512, 512),
-        latent_dim: int = 1024,
-        leak: float = 0.2,
+        encoder_dim: int = 64,
+        encoder_rates: list = [2, 4, 8, 8],
+        latent_dim: int = 64,
     ):
         super().__init__()
-        layers = []
-        in_ch = n_mels
+        self.n_mels = n_mels
+        self.encoder_dim = encoder_dim
+        self.encoder_rates = encoder_rates
+        self.latent_dim = latent_dim
 
-        # 多层 Conv1d 做下采样：kernel=4, stride=2, padding=1 -> 时间长度 /2
-        for h in hidden_channels:
-            layers.append(
-                nn.Conv1d(
-                    in_ch,
-                    h,
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
-                )
-            )
-            layers.append(nn.LeakyReLU(leak, inplace=True))
-            in_ch = h
+        blocks = []
+        # 第一层：把 n_mels 提升到 encoder_dim
+        blocks.append(WNConv1d(n_mels, encoder_dim, kernel_size=7, padding=3))
 
-        self.conv = nn.Sequential(*layers)
-        # 最终投影到 latent_dim，stride=1 不改变 T'
-        self.to_latent = nn.Conv1d(in_ch, latent_dim, kernel_size=3, padding=1)
+        cur_dim = encoder_dim
+        # 与 DAC 相同：每个 stride 前先把通道数 *2，然后进入 _EncoderBlock
+        for stride in encoder_rates:
+            next_dim = cur_dim * 2
+            blocks.append(_EncoderBlock(next_dim, stride=stride))  # 注意：内部用 dim//2
+            cur_dim = next_dim
+
+        self.final_dim = cur_dim  # encoder 最后 conv 之前的通道数
+
+        # 最后一层：Snake + Conv1d -> latent_dim
+        blocks += [
+            Snake1d(cur_dim),
+            WNConv1d(cur_dim, latent_dim, kernel_size=3, padding=1),
+        ]
+
+        self.block = nn.Sequential(*blocks)
+        self.o_dim = latent_dim
+
+        # 下采样因子：方便你外面算 T'
+        ds = 1
+        for s in encoder_rates:
+            ds *= s
+        self.downsample_factor = ds
 
     def forward(self, mel: torch.Tensor) -> torch.Tensor:
         """
         mel: (B, n_mels, T)
-        return: (B, latent_dim, T')
+        return z: (B, latent_dim, T')
         """
-        x = self.conv(mel)
-        z = self.to_latent(x)
-        return z
-
-
-class MelDecoder(nn.Module):
+        return self.block(mel)
+    
+    
+    
+    
+class _DecoderBlock(nn.Module):
     """
-    Mel 解码器：输入潜在表示 (B, latent_dim, T') -> 预测 Mel (B, n_mels, T_recon)
-    使用 ConvTranspose1d 做时间维上采样。
+    与 _EncoderBlock 镜像：
+    - 先上采样 (dim -> dim//2, stride)
+    - 再做多尺度 residual
+    """
+    def __init__(self, dim: int = 16, stride: int = 1):
+        super().__init__()
+        # 上采样：ConvTranspose1d
+        self.upsample = WNConvTranspose1d(
+            dim,
+            dim // 2,
+            kernel_size=2 * stride,
+            stride=stride,
+            padding=math.ceil(stride / 2),
+            output_padding=stride % 2,  # 一般可缓解 off-by-one
+        )
+
+        self.res_blocks = nn.Sequential(
+            _ResidualUnit(dim // 2, dilation=1),
+            _ResidualUnit(dim // 2, dilation=3),
+            _ResidualUnit(dim // 2, dilation=9),
+            Snake1d(dim // 2),
+        )
+
+    def forward(self, x):
+        x = self.upsample(x)
+        x = self.res_blocks(x)
+        return x
+    
+    
+
+
+
+class MelDecoder(AbsDecoder):
+    """
+    DAC 风格的 Mel 解码器：
+    输入 latent: (B, latent_dim, T')
+    输出 mel_hat: (B, n_mels, T_recon)
     """
     def __init__(
         self,
         n_mels: int = 100,
-        hidden_channels=(512, 512, 256),
-        latent_dim: int = 128,
-        leak: float = 0.2,
+        encoder_dim: int = 64,
+        encoder_rates: list = [2, 2, 2],
+        latent_dim: int = 64,
     ):
         super().__init__()
+        self.n_mels = n_mels
+        self.encoder_dim = encoder_dim
+        self.encoder_rates = encoder_rates
+        self.latent_dim = latent_dim
 
-        in_ch = latent_dim
-        layers = []
+        # 需要知道 encoder 最后一个 block 的通道数（跟 MelEncoder 保持一致）
+        cur_dim = encoder_dim
+        for stride in encoder_rates:
+            cur_dim *= 2
+        self.encoder_final_dim = cur_dim  # 对应 MelEncoder.final_dim
 
-        # 多层 ConvTranspose1d：kernel=4, stride=2, padding=1 -> 时间长度 *2
-        for h in hidden_channels:
-            layers.append(
-                nn.ConvTranspose1d(
-                    in_ch,
-                    h,
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
-                    output_padding=0,
-                )
-            )
-            layers.append(nn.LeakyReLU(leak, inplace=True))
-            in_ch = h
+        blocks = []
 
-        self.deconv = nn.Sequential(*layers)
-        # 输出到 n_mels 通道
-        self.to_mel = nn.Conv1d(in_ch, n_mels, kernel_size=3, padding=1)
+        # 首先把 latent_dim -> encoder_final_dim
+        blocks.append(WNConv1d(latent_dim, self.encoder_final_dim, kernel_size=3, padding=1))
+        blocks.append(Snake1d(self.encoder_final_dim))
+
+        # 反向遍历 encoder 的 strides，依次上采样
+        dec_dim = self.encoder_final_dim
+        for stride in reversed(encoder_rates):
+            blocks.append(_DecoderBlock(dec_dim, stride=stride))
+            dec_dim = dec_dim // 2  # 每个 block 把通道减半
+
+        # 最后一层：把 decoder 最终通道数 -> n_mels
+        blocks += [
+            WNConv1d(dec_dim, n_mels, kernel_size=7, padding=3),
+        ]
+
+        self.block = nn.Sequential(*blocks)
 
     def forward(self, z: torch.Tensor, target_len: int = None) -> torch.Tensor:
         """
         z: (B, latent_dim, T')
-        target_len: 如果提供，则在时间维上进行裁剪或 padding 对齐到该长度
-        return: (B, n_mels, T_recon)
+        target_len: 如果提供，则在时间维上裁剪/补齐到该长度
+        return mel_hat: (B, n_mels, T_recon)
         """
-        x = self.deconv(z)
-        mel_hat = self.to_mel(x)
+        mel_hat = self.block(z)
 
         if target_len is not None:
             cur_len = mel_hat.size(-1)
             if cur_len > target_len:
                 mel_hat = mel_hat[..., :target_len]
             elif cur_len < target_len:
-                # 简单 padding 到 target_len（常用于对齐）
                 pad = target_len - cur_len
                 mel_hat = F.pad(mel_hat, (0, pad))
+
         return mel_hat
-
-
-class MelAutoEncoder(nn.Module):
+    
+    
+    
+    
+from model.quantizer.quantize import ResidualVectorQuantize
+class MelAE(nn.Module):
     """
-    一个简单的封装，方便直接调用 encoder + decoder。
+    整体的 Mel Auto-Encoder：
+    - encoder: MelEncoder (DAC 风格)
+    - decoder: MelDecoder (镜像结构)
     """
     def __init__(
         self,
         n_mels: int = 100,
-        encoder_hidden=(256, 512, 512),
-        decoder_hidden=(512, 512, 256),
-        latent_dim: int = 128,
+        encoder_dim: int = 64,
+        encoder_rates: list = [2, 2, 2],
+        latent_dim: int = 64,
     ):
         super().__init__()
         self.encoder = MelEncoder(
             n_mels=n_mels,
-            hidden_channels=encoder_hidden,
+            encoder_dim=encoder_dim,
+            encoder_rates=encoder_rates,
             latent_dim=latent_dim,
         )
-        self.quantizer = VectorQuantize(
+        self.quantizer = ResidualVectorQuantize(
             latent_dim=latent_dim,
+            n_codebooks=8,
             codebook_size=1024,
-            codebook_dim=latent_dim,
+            codebook_dim=8,
+            quantizer_dropout=0.0,
         )
         self.decoder = MelDecoder(
             n_mels=n_mels,
-            hidden_channels=decoder_hidden,
+            encoder_dim=encoder_dim,
+            encoder_rates=encoder_rates,
             latent_dim=latent_dim,
         )
+
+    @property
+    def downsample_factor(self):
+        return self.encoder.downsample_factor
 
     def forward(self, mel: torch.Tensor):
         """
@@ -143,10 +255,12 @@ class MelAutoEncoder(nn.Module):
         z_q, _, _, _, _ = self.quantizer(z)
         mel_hat = self.decoder(z_q, target_len=mel.size(-1))
         return z, mel_hat
-
-
+    
+    
+    
+   
+from torch.nn import functional as F
 from model.utils.melspec import MelSpectrogramFeatures
-
 if __name__ == "__main__":
     # 1. 提取 mel
     mel_extractor = MelSpectrogramFeatures(
@@ -156,12 +270,27 @@ if __name__ == "__main__":
         n_mels=100,
         padding="center",
     )
-    dummy_audio = torch.randn(2, 24000)  # 2 个 1 秒 24k 的音频
+    dummy_audio = torch.randn(1, 24000)  # 2 个 1 秒音频
     mel = mel_extractor(dummy_audio)     # (2, 100, T)
-    print("mel shape:", mel.shape)
+    print("mel:", mel.shape)
 
-    # 2. 送入编码器-解码器
-    ae = MelAutoEncoder(n_mels=100, latent_dim=128)
-    z, mel_hat = ae(mel)
-    print("latent shape:", z.shape)       # (2, 128, T')
-    print("recon mel shape:", mel_hat.shape)  # (2, 100, T_recon≈T)
+    # 2. MelAE（DAC 风格）
+    melae = MelAE(
+        n_mels=100,
+        encoder_dim=64,
+        encoder_rates=[2, 2, 2],
+        latent_dim=64,
+    )
+
+    z, mel_hat = melae(mel)
+    print("z:", z.shape)
+    print("mel_hat:", mel_hat.shape)
+
+    # 3. 损失
+    loss = F.l1_loss(mel_hat, mel)
+    loss.backward()
+    print("loss:", loss.item())
+
+
+
+

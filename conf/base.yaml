@@ -4,13 +4,16 @@ $include:
   - conf/model/encoder/&{encoder}.yaml
   - conf/model/decoder/&{decoder}.yaml
   - conf/model/quantizer/&{quantizer}.yaml
+  - conf/model/vocoder/&{vocoder}.yaml
 
 
 
 
 # model component
-state: train # train/inference
-input_format: wav # repr/wav/melspec
-encoder: encodec
-decoder: dac
+state: inference # train/inference
+input_format: melspec # repr/wav/melspec
+encoder: mel
 quantizer: rvq
+decoder: mel
+output_format: melspec  # wav/melspec
+vocoder: vocos

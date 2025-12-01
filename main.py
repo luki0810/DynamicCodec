@@ -7,6 +7,7 @@ import os
 from audiotools import AudioSignal
 import soundfile
 
+from data.melspec import MelSpectrogramFeatures
 from data.ssl.repr import ssl_model
 from model.utils.util import to_scalar, pretty_shape
 from model.build import DynamicTask
@@ -131,16 +132,32 @@ def main(load_path: str = None, save_path: str = None):
             
             
     elif input_format == 'melspec':
-        pass
-        # TODO: melspectrogram to code to waveform
-
+        from data.melspec import MelSpectrogramFeatures
+        with argbind.scope(args):
+            mel_extractor = MelSpectrogramFeatures().to(model.device)
+            
+        signal = AudioSignal(fname)
+        signal = signal.to_mono() # to single
+        signal.to(model.device)
+        mel = mel_extractor(signal.audio_data.squeeze(0))
+        model.eval()
+        with torch.no_grad():
+            out = model(mel)
+            
+    
+    if args['output_format'] == 'melspec':
+        from vocos import Vocos
+        vocos = Vocos.from_pretrained("charactr/vocos-mel-24khz").to(model.device)
+        out["audio"] = vocos.decode(out["audio"])
         
     # output    
     out_print(model, out)
-    # save output audio
-    recon_audio = out["audio"].squeeze().cpu().numpy()
-    soundfile.write(Path(save_path)/ "recon.wav", recon_audio, sample_rate)
-    print(f"[INFO] Saved reconstructed audio to {Path(save_path)/ 'recon.wav'}")
+    
+    if args['save'] is True:
+        # save output audio
+        recon_audio = out["audio"].squeeze().cpu().numpy()
+        soundfile.write(Path(save_path)/ "recon.wav", recon_audio, sample_rate)
+        print(f"[INFO] Saved reconstructed audio to {Path(save_path)/ 'recon.wav'}")
     
     
 

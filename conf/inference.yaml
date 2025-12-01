@@ -2,9 +2,10 @@
 sample_rate: 48000
 
 # global args
-resume: true  # path to checkpoint to resume training from
+resume: false  # path to checkpoint to resume training from
 exp_name: dac+dac
 tag: best
 seed: 42
 device: cuda:1
 batch_size: 1
+save: true

@@ -8,8 +8,10 @@ from model.encoder.dac import Encoder as dac_Encoder
 from model.encoder.encodec import Encoder as encodec_Encoder
 from model.decoder.encodec import Decoder as encodec_Decoder
 from model.encoder.repcodec import Encoder as repcodec_Encoder
+from model.encoder.mel import Encoder as MelEncoder
+from model.decoder.mel import Decoder as MelDecoder
 
-from model.utils.abs_class import AbsEncoder, AbsDecoder, AbsQuantizer
+from model.utils.abs_class import AbsEncoder, AbsDecoder, AbsQuantizer, AbsVocoder
 
 
 # choices set
@@ -19,7 +21,8 @@ encoder_choices = ClassChoices(
         default=dac_Encoder,
         dac=dac_Encoder,
         encodec=encodec_Encoder,
-        repcodec=repcodec_Encoder
+        repcodec=repcodec_Encoder,
+        mel = MelEncoder
         # 你可以在这里再挂其它实现，比如：
         # conv=ConvEncoder, transformer=TransformerEncoder1D, ...
     ),
@@ -45,9 +48,20 @@ decoder_choices = ClassChoices(
     classes=dict(
         default=dac_Decoder,
         dac=dac_Decoder,
-        encodec=encodec_Decoder
+        encodec=encodec_Decoder,
+        mel = MelDecoder
         # 再挂：big=BigDecoder, hifi=HiFiDecoder, ...
     ),
     type_check=AbsDecoder,
     default="default",
+)
+
+# TODO: vocoder_choices
+vocoder_choices = ClassChoices(
+    name="vocoder",
+    classes=dict(
+        # 暂时留空
+    ),
+    type_check=AbsVocoder,
+    default=None,
 )
