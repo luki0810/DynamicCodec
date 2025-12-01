@@ -1,10 +1,26 @@
 import torch
 import torchaudio
 import torch.nn as nn
+import argbind
 
+class FeatureExtractor(nn.Module):
+    """Base class for feature extractors."""
+
+    def forward(self, audio: torch.Tensor, **kwargs) -> torch.Tensor:
+        """
+        Extract features from the given audio.
+
+        Args:
+            audio (Tensor): Input audio waveform.
+
+        Returns:
+            Tensor: Extracted features of shape (B, C, L), where B is the batch size,
+                    C denotes output features, and L is the sequence length.
+        """
+        raise NotImplementedError("Subclasses must implement the forward method.")
 
 # from vocos
-class MelSpectrogramFeatures(nn.Module):
+class MelSpectrogramFeatures(FeatureExtractor):
     def __init__(self, sample_rate=24000, n_fft=1024, hop_length=256, n_mels=100, padding="center"):
         super().__init__()
         if padding not in ["center", "same"]:
@@ -33,6 +49,8 @@ class MelSpectrogramFeatures(nn.Module):
         return torch.log(torch.clip(x, min=clip_val))
 
     def forward(self, audio, **kwargs):
+        if audio.dim() == 3 and audio.size(1) == 1:
+            audio = audio.squeeze(1)
         if self.padding == "same":
             pad = self.mel_spec.win_length - self.mel_spec.hop_length
             audio = torch.nn.functional.pad(audio, (pad // 2, pad // 2), mode="reflect")
@@ -41,7 +59,6 @@ class MelSpectrogramFeatures(nn.Module):
         return features
 
 
-import argbind
 @argbind.bind()
 def mel_model(
     sample_rate: int = 24000,
@@ -59,14 +76,3 @@ def mel_model(
     )
     return mel_extractor
 
-if __name__ == "__main__":
-    mel_extractor = MelSpectrogramFeatures(
-        sample_rate = 24000,
-        n_fft = 1024,
-        hop_length = 256,
-        n_mels = 100,
-        padding = "center"
-    )
-    dummy_audio = torch.randn(1, 16000)  # Batch of 2 audio samples, each 1 second at 16kHz
-    mel_features = mel_extractor(dummy_audio)
-    print("Mel Spectrogram Features shape:", mel_features.shape)

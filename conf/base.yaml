@@ -11,9 +11,9 @@ $include:
 
 # model component
 state: inference # train/inference
-input_format: melspec # repr/wav/melspec
-encoder: mel
+input_format: wav # repr/wav/melspec
+encoder: dac
 quantizer: rvq
 decoder: mel
-output_format: melspec  # wav/melspec
 vocoder: vocos
+# vocoder: null

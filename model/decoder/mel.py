@@ -60,18 +60,18 @@ class Decoder(AbsDecoder):
     def __init__(
         self,
         n_mels: int = 100, # d_out
-        encoder_dim: int = 64,
-        encoder_rates: list = [2, 2, 2],
+        decoder_dim: int = 64,
+        decoder_rates: list = [2, 2, 2],
         latent_dim: int = 64,
     ):
         super().__init__()
         self.n_mels = n_mels
-        self.encoder_dim = encoder_dim
-        self.encoder_rates = encoder_rates
+        self.decoder_dim = decoder_dim
+        self.decoder_rates = decoder_rates
         self.latent_dim = latent_dim
 
-        cur_dim = encoder_dim
-        for stride in encoder_rates:
+        cur_dim = decoder_dim
+        for stride in decoder_rates:
             cur_dim *= 2
         self.encoder_final_dim = cur_dim  # MelEncoder.final_dim
 
@@ -81,7 +81,7 @@ class Decoder(AbsDecoder):
         blocks.append(Snake1d(self.encoder_final_dim))
 
         dec_dim = self.encoder_final_dim
-        for stride in reversed(encoder_rates):
+        for stride in reversed(decoder_rates):
             blocks.append(_DecoderBlock(dec_dim, stride=stride))
             dec_dim = dec_dim // 2  
 

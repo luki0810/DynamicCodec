@@ -7,8 +7,8 @@ import os
 from audiotools import AudioSignal
 import soundfile
 
-from data.melspec import MelSpectrogramFeatures
 from data.ssl.repr import ssl_model
+from data.melspec import mel_model
 from model.utils.util import to_scalar, pretty_shape
 from model.build import DynamicTask
 from model.utils.dynamic_argbind_loader import load_config_for_argbind
@@ -96,7 +96,7 @@ def main(load_path: str = None, save_path: str = None):
         # dynamice build
         print("[WARN] No resume load specified, using randomly initialized model.")
         with argbind.scope(args):
-            model = DynamicTask.build_model()
+            model = DynamicTask.build_model(args=args)
     model.to(device)
         
         
@@ -104,51 +104,14 @@ def main(load_path: str = None, save_path: str = None):
     fname = 'wav_file/input_wav/p226_002.wav'
     
     
-    # input_format
-    input_format = args['input_format']
-    if input_format == 'repr':
-        # get_ssl_model
-        with argbind.scope(args):
-            reader = ssl_model()
-        # inference ssl
-        frames = soundfile.info(fname).frames
-        feat = reader.get_feats(fname, frames)
-        feat = feat.unsqueeze(0)
-        feat = feat.transpose(1, 2).to(device)
-        # inference other
-        model.eval()
-        with torch.no_grad():
-            out = model(feat)
-        
-    elif input_format == 'wav':
-        model.to(device)
-        # input
-        signal = AudioSignal(fname)
-        signal = signal.to_mono() # to single
-        signal.to(model.device)
-        model.eval()
-        with torch.no_grad():
-            out = model(signal.audio_data, signal.sample_rate)
-            
-            
-    elif input_format == 'melspec':
-        from data.melspec import MelSpectrogramFeatures
-        with argbind.scope(args):
-            mel_extractor = MelSpectrogramFeatures().to(model.device)
-            
-        signal = AudioSignal(fname)
-        signal = signal.to_mono() # to single
-        signal.to(model.device)
-        mel = mel_extractor(signal.audio_data.squeeze(0))
-        model.eval()
-        with torch.no_grad():
-            out = model(mel)
-            
-    
-    if args['output_format'] == 'melspec':
-        from vocos import Vocos
-        vocos = Vocos.from_pretrained("charactr/vocos-mel-24khz").to(model.device)
-        out["audio"] = vocos.decode(out["audio"])
+    signal = AudioSignal(fname)
+    signal = signal.to_mono() # to single
+    signal.to(model.device)
+    model.eval()
+    with torch.no_grad():
+        out = model(signal.audio_data, signal.sample_rate)
+
+
         
     # output    
     out_print(model, out)
@@ -160,6 +123,18 @@ def main(load_path: str = None, save_path: str = None):
         print(f"[INFO] Saved reconstructed audio to {Path(save_path)/ 'recon.wav'}")
     
     
+    
+"""
+    if input_format == 'repr':
+        # get_ssl_model
+        with argbind.scope(args):
+            reader = ssl_model()
+        # inference ssl
+        frames = soundfile.info(fname).frames
+        feat = reader.get_feats(fname, frames)
+        feat = feat.unsqueeze(0)
+        feat = feat.transpose(1, 2).to(device)
+"""
 
 
 if __name__ == "__main__":

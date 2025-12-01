@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+from model.vocoder.vocos import Vocos
 from model.all_choices import *
 from model.utils.abs_class import AbsConvCodec
 from model.utils.abs_class import AbsDiscriminator
@@ -44,7 +44,7 @@ class DynamicDiscriminator(AbsDiscriminator):
             sampling rates (in Hz) to run MSD at, by default []
             If empty, MSD is not used.
         periods : list, optional
-            periods (of samples) to run MPD at, by default [2, 3, 5, 7, 11]
+            periods (of samples) to run Mat, by default [2, 3, 5, 7, 11]
         fft_sizes : list, optional
             Window sizes of the FFT to run MRD at, by default [2048, 1024, 512]
         sample_rate : int, optional
@@ -95,9 +95,11 @@ class DynamicCodec(AbsConvCodec):
         self,
         sample_rate: int = 44100,
         encoder_rates: List[int] = [2, 4, 8, 8],
+        feature_extractor: Optional[nn.Module] = None,
         encoder: Optional[nn.Module] = None,
         quantizer: Optional[nn.Module] = None,
         decoder: Optional[nn.Module] = None,
+        vocoder: Optional[nn.Module] = None,
 
         # init weights
         init_weights_fn: Optional[callable] = None,
@@ -114,6 +116,9 @@ class DynamicCodec(AbsConvCodec):
         self.encoder = encoder
         self.quantizer = quantizer
         self.decoder = decoder
+        self.vocoder = vocoder
+        self.feature_extractor = feature_extractor
+        
 
         # --- init weights ---
         if init_weights_fn is not None:
@@ -136,6 +141,10 @@ class DynamicCodec(AbsConvCodec):
         right_pad = math.ceil(length / self.hop_length) * self.hop_length - length
         if right_pad > 0:
             audio_data = F.pad(audio_data, (0, right_pad))
+
+        if self.feature_extractor is not None:
+            audio_data = self.feature_extractor(audio_data)          
+
         return audio_data
 
     def encode(self, audio_data: torch.Tensor):
@@ -147,7 +156,10 @@ class DynamicCodec(AbsConvCodec):
         return z_q, codes, latents, loss_dict, other
 
     def decode(self, z: torch.Tensor):
-        return self.decoder(z)
+        z_hat = self.decoder(z)
+        if self.vocoder is not None:
+            z_hat = self.vocoder.decode(z_hat)
+        return z_hat
 
     def forward(
         self,
@@ -177,9 +189,12 @@ class DynamicTask:
     @argbind.bind(without_prefix=True)
     def build_model(
         cls,
+        args,
+        input_format: str = "wav",
         encoder: str = "error",
         quantizer: str = "error",
         decoder: str = "error",
+        vocoder: str = None,
     ) -> nn.Module:
         # 1) encoder
         enc_cls = encoder_choices.get_class(encoder)
@@ -195,12 +210,31 @@ class DynamicTask:
         dec_cls = decoder_choices.get_class(decoder)
         dec_cls = argbind.bind(dec_cls, without_prefix=True)
         dec = dec_cls()
+        
+        
+        # 4) vocoder
+        vocoder_model = None
+        if vocoder is not None:
+            vocoder_model = Vocos.from_pretrained("charactr/vocos-mel-24khz")
 
-        # 4) combination
+        # 5) feature_extractor
+        feature_extractor_model = None
+        if input_format == "melspec":
+            with argbind.scope(args):
+                from data.melspec import mel_model
+                feature_extractor_model = mel_model()
+        elif input_format == "repr":
+            with argbind.scope(args):
+                from data.ssl.repr import ssl_model
+                feature_extractor_model = ssl_model()
+
+        # 6) combination
         model = DynamicCodec(
+            feature_extractor=feature_extractor_model,
             encoder=enc,
             quantizer=qtz,
             decoder=dec,
+            vocoder=vocoder_model
         )
         # print("=========== build model successfully ===========")
         # print("encoder: ", encoder)
