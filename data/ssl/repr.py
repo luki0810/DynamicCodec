@@ -9,8 +9,9 @@ from typing import Optional
 from fairseq.data.audio.audio_utils import get_features_or_waveform
 from data.melspec import FeatureExtractor
 
-class SSLFeatureExtractor(nn.Module):
 
+
+class SSLFeatureExtractor(FeatureExtractor):
     def __init__(self, reader):
         super().__init__()
         self.reader = reader

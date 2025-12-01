@@ -211,7 +211,6 @@ class DynamicTask:
         dec_cls = argbind.bind(dec_cls, without_prefix=True)
         dec = dec_cls()
         
-        
         # 4) vocoder
         vocoder_model = None
         if vocoder is not None:
@@ -236,11 +235,6 @@ class DynamicTask:
             decoder=dec,
             vocoder=vocoder_model
         )
-        # print("=========== build model successfully ===========")
-        # print("encoder: ", encoder)
-        # print("quantizer: ",quantizer)
-        # print("decoder: ", decoder)
-        # print("================================================")
         return model
     
     @classmethod

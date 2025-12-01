@@ -4,7 +4,7 @@ $include:
   - conf/model/encoder/&{encoder}.yaml
   - conf/model/decoder/&{decoder}.yaml
   - conf/model/quantizer/&{quantizer}.yaml
-  - conf/model/vocoder/&{vocoder}.yaml
+  - conf/model/vocoder/&{vocoder}.yaml # TODO
 
 
 
