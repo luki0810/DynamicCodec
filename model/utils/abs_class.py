@@ -16,3 +16,6 @@ class AbsQuantizer(nn.Module):
     
 class AbsConvCodec(BaseModel, CodecMixin):
     pass
+
+class AbsDiscriminator(BaseModel):
+    pass

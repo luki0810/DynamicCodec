@@ -10,6 +10,7 @@ import torch.nn.functional as F
 
 from model.all_choices import *
 from model.utils.abs_class import AbsConvCodec
+from model.utils.abs_class import AbsDiscriminator
 from model.all_choices import encoder_choices, decoder_choices, quantizer_choices
 
 
@@ -24,7 +25,69 @@ def init_weights(m):
         nn.init.trunc_normal_(m.weight, std=0.02)
         if getattr(m, "bias", None) is not None:
             nn.init.constant_(m.bias, 0)
-        
+
+@argbind.bind(without_prefix=False)
+class DynamicDiscriminator(AbsDiscriminator):
+    def __init__(
+        self,
+        rates: list = [],
+        periods: list = [2, 3, 5, 7, 11],
+        fft_sizes: list = [2048, 1024, 512],
+        sample_rate: int = 44100,
+        bands: list = [],
+    ):
+        """Discriminator that combines multiple discriminators.
+
+        Parameters
+        ----------
+        rates : list, optional
+            sampling rates (in Hz) to run MSD at, by default []
+            If empty, MSD is not used.
+        periods : list, optional
+            periods (of samples) to run MPD at, by default [2, 3, 5, 7, 11]
+        fft_sizes : list, optional
+            Window sizes of the FFT to run MRD at, by default [2048, 1024, 512]
+        sample_rate : int, optional
+            Sampling rate of audio in Hz, by default 44100
+        bands : list, optional
+            Bands to run MRD at, by default `BANDS`
+        """
+        super().__init__()
+        discs = []
+        from model.discriminator.discriminator import MPD, MSD, MRD
+        discs += [MPD(p) for p in periods]
+        discs += [MSD(r, sample_rate=sample_rate) for r in rates]
+        discs += [MRD(f, sample_rate=sample_rate, bands=bands) for f in fft_sizes]
+        self.discriminators = nn.ModuleList(discs)
+
+        self.rates = rates
+        self.periods = periods
+        self.fft_sizes = fft_sizes
+        self.sample_rate = sample_rate
+        self.bands = bands
+
+    def preprocess(self, y):
+        # Remove DC offset
+        y = y - y.mean(dim=-1, keepdims=True)
+        # Peak normalize the volume of input audio
+        y = 0.8 * y / (y.abs().max(dim=-1, keepdim=True)[0] + 1e-9)
+        return y
+
+    def forward(self, x):
+        x = self.preprocess(x)
+        fmaps = [d(x) for d in self.discriminators]
+        return fmaps
+
+
+@argbind.bind(without_prefix=True)
+class DynamicDiscriminatorTask:
+    @classmethod
+    def build_disc(cls):
+        return DynamicDiscriminator()
+
+    @classmethod
+    def load_from_folder(cls, **kwargs):
+        return DynamicDiscriminator.load_from_folder(**kwargs)
       
 @argbind.bind(without_prefix=True)
 class DynamicCodec(AbsConvCodec):
@@ -149,6 +212,7 @@ class DynamicTask:
     @classmethod
     def load_from_folder(cls, **kwargs):
         return DynamicCodec.load_from_folder(**kwargs)
+    
 
 
 if __name__ == "__main__":

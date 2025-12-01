@@ -43,9 +43,7 @@ class MPD(nn.Module):
 
     def pad_to_period(self, x):
         t = x.shape[-1]
-        pad = (self.period - (t % self.period)) % self.period 
-        if pad > 0:
-            x = F.pad(x, (0, pad), mode="reflect")
+        x = F.pad(x, (0, self.period - t % self.period), mode="reflect")
         return x
 
     def forward(self, x):
@@ -172,7 +170,6 @@ class MRD(nn.Module):
         fmap.append(x)
 
         return fmap
-
 
 class Discriminator(ml.BaseModel):
     def __init__(

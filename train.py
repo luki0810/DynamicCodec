@@ -15,7 +15,7 @@ from audiotools.data import transforms # audio data transform to tensor
 
 
 import model
-from model.build import DynamicTask, DynamicCodec
+from model.build import DynamicTask, DynamicCodec as DyC, DynamicDiscriminatorTask, DynamicDiscriminator as DyD
 from model.utils.dynamic_argbind_loader import load_config_for_argbind
 
 
@@ -31,6 +31,8 @@ def _dump_args(args, save_path):
             print(f"[WARN] Could not remove {save_path}: {e}")      
     argbind.dump_args(args, save_path)
 
+DynamicCodec = argbind.bind(DyC)
+DynamicDiscriminator = argbind.bind(DyD)
 
 # in CLI, with no use of prefix, example: --precision=bf16, --use_ddp=true, --cpu=false
 # amp: false
@@ -45,9 +47,6 @@ AdamW = argbind.bind(torch.optim.AdamW, group=["generator", "discriminator"])
 @argbind.bind("generator", "discriminator") # 装饰器修饰函数
 def ExponentialLR(optimizer, gamma: float = 1.0):
     return torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma)
-
-# Discriminator.xx: xx
-Discriminator = argbind.bind(model.discriminator.Discriminator)
 
 # Dataloader
 # train/AudioDataset.xx: xx
@@ -128,7 +127,7 @@ class State:
     optimizer_g: AdamW
     scheduler_g: ExponentialLR
 
-    discriminator: Discriminator
+    discriminator: DynamicDiscriminator
     optimizer_d: AdamW
     scheduler_d: ExponentialLR
 
@@ -167,16 +166,18 @@ def load(
         # 分开两个文件夹，对应的需要看看save的逻辑，需要修改save逻辑(TODO)
         # |-latest
         # ||-dynamiccodec
-        # ||-discriminator
+        # ||-dynamicdiscriminator
         if (Path(kwargs["folder"]) / "dynamiccodec").exists():
-            generator, g_extra = DynamicCodec.load_from_folder(**kwargs)
-        if (Path(kwargs["folder"]) / "discriminator").exists():
-            discriminator, d_extra = Discriminator.load_from_folder(**kwargs)
+            with argbind.scope(args):
+                generator, g_extra = DynamicTask.load_from_folder(**kwargs)
+        if (Path(kwargs["folder"]) / "dynamicdiscriminator").exists():
+            with argbind.scope(args):
+                discriminator, d_extra = DynamicDiscriminatorTask.load_from_folder(**kwargs)
     else:
         tracker.print("No parameters specified for loading, randomly initialized generator and discriminator")
         with argbind.scope(args):
             generator = DynamicTask.build_model() # from args
-        discriminator = Discriminator() if discriminator is None else discriminator
+            discriminator = DynamicDiscriminatorTask.build_disc() if discriminator is None else discriminator
 
     generator = accel.prepare_model(generator)
     discriminator = accel.prepare_model(discriminator)
@@ -362,9 +363,19 @@ def checkpoint(state, save_iters, save_path, accel):
             f"{save_path}/{tag}", generator_extra,
             package=False
         )
+
         discriminator_extra = {
             "optimizer.pth": state.optimizer_d.state_dict(),
             "scheduler.pth": state.scheduler_d.state_dict(),
+            "metadata.pth": {
+                "kwargs": {
+                    "sample_rate": state.discriminator.sample_rate,
+                    "rates": state.discriminator.rates,
+                    "periods": state.discriminator.periods,
+                    "fft_sizes": state.discriminator.fft_sizes,
+                    "bands": state.discriminator.bands
+                }
+            }
         }
         accel.unwrap(state.discriminator).save_to_folder(
             f"{save_path}/{tag}", discriminator_extra,

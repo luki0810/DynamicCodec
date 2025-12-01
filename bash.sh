@@ -11,7 +11,7 @@ python main.py \
 export CUDA_VISIBLE_DEVICES=1
 python train.py \
 --load_path conf/base.yaml \
---save_path runs/dac+dac/ \
+--save_path runs/dac+dac \
 --args.debug 1
 
 
