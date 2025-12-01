@@ -102,10 +102,8 @@ def main(load_path: str = None, save_path: str = None):
         
     #input file
     fname = 'wav_file/input_wav/p226_002.wav'
-    
-    
     signal = AudioSignal(fname)
-    signal = signal.to_mono() # to single
+    signal = signal.to_mono()
     signal.to(model.device)
     model.eval()
     with torch.no_grad():
