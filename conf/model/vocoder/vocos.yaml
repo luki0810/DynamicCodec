@@ -1,0 +1,7 @@
+Vocoder.input_channels: 100
+Vocoder.dim: 512
+Vocoder.intermediate_dim: 1536
+Vocoder.num_layers: 8
+Vocoder.n_fft: 1024
+Vocoder.hop_length: 256
+Vocoder.padding: center

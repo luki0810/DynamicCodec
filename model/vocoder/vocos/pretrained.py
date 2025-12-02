@@ -6,9 +6,11 @@ import torch
 import yaml
 from huggingface_hub import hf_hub_download
 from torch import nn
-from model.vocoder.vocos.feature_extractors import FeatureExtractor, EncodecFeatures
-from model.vocoder.vocos.heads import FourierHead
-from model.vocoder.vocos.models import Backbone
+
+
+from data.base import FeatureExtractor
+from model.vocoder.vocos.heads import FourierHead, ISTFTHead
+from model.vocoder.vocos.models import Backbone, VocosBackbone
 
 
 def instantiate_class(args: Union[Any, Tuple[Any, ...]], init: Dict[str, Any]) -> Any:
@@ -25,11 +27,102 @@ def instantiate_class(args: Union[Any, Tuple[Any, ...]], init: Dict[str, Any]) -
     if not isinstance(args, tuple):
         args = (args,)
     class_module, class_name = init["class_path"].rsplit(".", 1)
-    # from local module
+    # TODO:
     class_module = "model.vocoder." + class_module
     module = __import__(class_module, fromlist=[class_name])
     args_class = getattr(module, class_name)
     return args_class(*args, **kwargs)
+
+
+class VocosForward(nn.Module):
+    """
+    A lightweight vocoder wrapper that only keeps the Vocos backbone and head.
+    It expects pre-computed features of shape (B, C, L) and outputs waveform (B, T).
+    """
+
+    def __init__(self, backbone: VocosBackbone, head: ISTFTHead):
+        super().__init__()
+        self.backbone = backbone
+        self.head = head
+
+    @classmethod
+    def init_from_code(
+        cls,
+        
+        # VocosBackbone args
+        input_channels: int = 100,
+        dim: int = 512,
+        intermediate_dim: int = 1536,
+        num_layers: int = 8,
+        layer_scale_init_value: Optional[float] = None,
+        adanorm_num_embeddings: Optional[int] = None,
+        
+        # ISTFT head args
+        # dim: int, 
+        n_fft: int = 1024, 
+        hop_length: int = 256, 
+        padding: str = "same"
+    ):
+        """
+        Initialize VocosForward from backbone and head arguments.
+        """
+        backbone = VocosBackbone(
+            input_channels=input_channels,
+            dim=dim,
+            intermediate_dim=intermediate_dim,
+            num_layers=num_layers,
+            layer_scale_init_value=layer_scale_init_value,
+            adanorm_num_embeddings=adanorm_num_embeddings,
+        )
+        head = ISTFTHead(
+            dim=dim,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            padding=padding,
+        )
+        model = cls(backbone=backbone, head=head)
+        return model
+
+    @classmethod
+    def from_hparams(cls, config_path: str) -> "VocosForward":
+        """
+        Create a VocosForward instance from a YAML config that contains
+        'backbone' and 'head' entries in the Lightning-style format:
+
+        backbone:
+          class_path: vocos.models.VocosBackbone
+          init_args: { ... }
+
+        head:
+          class_path: vocos.heads.ISTFTHead
+          init_args: { ... }
+        """
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+
+        backbone = instantiate_class(args=(), init=config["backbone"])
+        head = instantiate_class(args=(), init=config["head"])
+        model = cls(backbone=backbone, head=head)
+        return model
+
+    def forward(self, features: torch.Tensor, **kwargs: Any) -> torch.Tensor:
+        """
+        Args:
+            features: (B, C, L) feature tensor.
+
+        Returns:
+            (B, T) waveform tensor.
+        """
+        x = self.backbone(features, **kwargs)
+        audio_output = self.head(x)
+        return audio_output
+    
+    
+    def decode(self, features_input: torch.Tensor, **kwargs: Any) -> torch.Tensor:
+        x = self.backbone(features_input, **kwargs)
+        audio_output = self.head(x)
+        return audio_output
+
 
 
 class Vocos(nn.Module):
@@ -70,12 +163,6 @@ class Vocos(nn.Module):
         model_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin", revision=revision)
         model = cls.from_hparams(config_path)
         state_dict = torch.load(model_path, map_location="cpu")
-        if isinstance(model.feature_extractor, EncodecFeatures):
-            encodec_parameters = {
-                "feature_extractor.encodec." + key: value
-                for key, value in model.feature_extractor.encodec.state_dict().items()
-            }
-            state_dict.update(encodec_parameters)
         model.load_state_dict(state_dict)
         model.eval()
         return model
@@ -114,32 +201,3 @@ class Vocos(nn.Module):
         x = self.backbone(features_input, **kwargs)
         audio_output = self.head(x)
         return audio_output
-
-    @torch.inference_mode()
-    def codes_to_features(self, codes: torch.Tensor) -> torch.Tensor:
-        """
-        Transforms an input sequence of discrete tokens (codes) into feature embeddings using the feature extractor's
-        codebook weights.
-
-        Args:
-            codes (Tensor): The input tensor. Expected shape is (K, L) or (K, B, L),
-                            where K is the number of codebooks, B is the batch size and L is the sequence length.
-
-        Returns:
-            Tensor: Features of shape (B, C, L), where B is the batch size, C denotes the feature dimension,
-                    and L is the sequence length.
-        """
-        assert isinstance(
-            self.feature_extractor, EncodecFeatures
-        ), "Feature extractor should be an instance of EncodecFeatures"
-
-        if codes.dim() == 2:
-            codes = codes.unsqueeze(1)
-
-        n_bins = self.feature_extractor.encodec.quantizer.bins
-        offsets = torch.arange(0, n_bins * len(codes), n_bins, device=codes.device)
-        embeddings_idxs = codes + offsets.view(-1, 1, 1)
-        features = torch.nn.functional.embedding(embeddings_idxs, self.feature_extractor.codebook_weights).sum(dim=0)
-        features = features.transpose(1, 2)
-
-        return features

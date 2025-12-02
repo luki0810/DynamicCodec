@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from model.vocoder.vocos import Vocos
 from model.all_choices import *
 from model.utils.abs_class import AbsConvCodec
 from model.utils.abs_class import AbsDiscriminator
@@ -211,10 +210,14 @@ class DynamicTask:
         dec = dec_cls()
         
         # 4) vocoder
-        vocoder_model = None
+        vo = None
         if vocoder is not None:
-            vocoder_model = Vocos.from_pretrained("charactr/vocos-mel-24khz")
-
+            from model.vocoder.vocos.pretrained import Vocos
+            vo = Vocos.from_pretrained("charactr/vocos-mel-24khz")
+            # v_cls = vocoder_choices.get_class(vocoder)
+            # v_cls = argbind.bind(v_cls, without_prefix=False)
+            # vo = v_cls()
+            
         # 5) feature_extractor
         feature_extractor_model = None
         if input_format == "melspec":
@@ -232,7 +235,7 @@ class DynamicTask:
             encoder=enc,
             quantizer=qtz,
             decoder=dec,
-            vocoder=vocoder_model
+            vocoder=vo
         )
         return model
     

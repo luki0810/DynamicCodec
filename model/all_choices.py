@@ -1,16 +1,23 @@
 from model.utils.class_choice.class_choices import ClassChoices
 
-# module import
+# Quantizer import
 from model.quantizer.quantize import ResidualVectorQuantize, VectorQuantize
 from model.quantizer.bsq import BinarySphericalQuantizer
-from model.decoder.dac import Decoder as dac_Decoder
+
+
+# Encoder and Decoder import
 from model.encoder.dac import Encoder as dac_Encoder
+from model.decoder.dac import Decoder as dac_Decoder
 from model.encoder.encodec import Encoder as encodec_Encoder
 from model.decoder.encodec import Decoder as encodec_Decoder
 from model.encoder.repcodec import Encoder as repcodec_Encoder
 from model.encoder.mel import Encoder as MelEncoder
 from model.decoder.mel import Decoder as MelDecoder
 
+# Vocoder import
+from model.vocoder.voco_istft import Vocoder as Vocos
+
+# Abstract class import
 from model.utils.abs_class import AbsEncoder, AbsDecoder, AbsQuantizer, AbsVocoder
 
 
@@ -23,8 +30,6 @@ encoder_choices = ClassChoices(
         encodec=encodec_Encoder,
         repcodec=repcodec_Encoder,
         mel = MelEncoder
-        # 你可以在这里再挂其它实现，比如：
-        # conv=ConvEncoder, transformer=TransformerEncoder1D, ...
     ),
     type_check=AbsEncoder,
     default="default",
@@ -37,7 +42,6 @@ quantizer_choices = ClassChoices(
         vq=VectorQuantize,
         rvq=ResidualVectorQuantize,
         bsq=BinarySphericalQuantizer
-        # 也可添加：ema=EMAResidualVQ, gumbel=GumbelVQ, ...
     ),
     type_check=AbsQuantizer,
     default="default",
@@ -50,17 +54,15 @@ decoder_choices = ClassChoices(
         dac=dac_Decoder,
         encodec=encodec_Decoder,
         mel = MelDecoder
-        # 再挂：big=BigDecoder, hifi=HiFiDecoder, ...
     ),
     type_check=AbsDecoder,
     default="default",
 )
 
-# TODO: vocoder_choices
 vocoder_choices = ClassChoices(
     name="vocoder",
     classes=dict(
-        # 暂时留空
+        vocos = Vocos
     ),
     type_check=AbsVocoder,
     default=None,

@@ -2,10 +2,7 @@ from typing import List
 
 import torch
 import torchaudio
-from encodec import EncodecModel
 from torch import nn
-
-from model.vocoder.vocos.modules import safe_log
 
 
 class FeatureExtractor(nn.Module):
@@ -40,60 +37,36 @@ class MelSpectrogramFeatures(FeatureExtractor):
             power=1,
         )
 
+    def safe_log(self, x: torch.Tensor, clip_val: float = 1e-7) -> torch.Tensor:
+        """
+        Computes the element-wise logarithm of the input tensor with clipping to avoid near-zero values.
+
+        Args:
+            x (Tensor): Input tensor.
+            clip_val (float, optional): Minimum value to clip the input tensor. Defaults to 1e-7.
+
+        Returns:
+            Tensor: Element-wise logarithm of the input tensor with clipping applied.
+        """
+        return torch.log(torch.clip(x, min=clip_val))
+
     def forward(self, audio, **kwargs):
         if self.padding == "same":
             pad = self.mel_spec.win_length - self.mel_spec.hop_length
             audio = torch.nn.functional.pad(audio, (pad // 2, pad // 2), mode="reflect")
         mel = self.mel_spec(audio)
-        features = safe_log(mel)
+        features = self.safe_log(mel)
         return features
 
 
-class EncodecFeatures(FeatureExtractor):
-    def __init__(
-        self,
-        encodec_model: str = "encodec_24khz",
-        bandwidths: List[float] = [1.5, 3.0, 6.0, 12.0],
-        train_codebooks: bool = False,
-    ):
-        super().__init__()
-        if encodec_model == "encodec_24khz":
-            encodec = EncodecModel.encodec_model_24khz
-        elif encodec_model == "encodec_48khz":
-            encodec = EncodecModel.encodec_model_48khz
-        else:
-            raise ValueError(
-                f"Unsupported encodec_model: {encodec_model}. Supported options are 'encodec_24khz' and 'encodec_48khz'."
-            )
-        self.encodec = encodec(pretrained=True)
-        for param in self.encodec.parameters():
-            param.requires_grad = False
-        self.num_q = self.encodec.quantizer.get_num_quantizers_for_bandwidth(
-            self.encodec.frame_rate, bandwidth=max(bandwidths)
-        )
-        codebook_weights = torch.cat([vq.codebook for vq in self.encodec.quantizer.vq.layers[: self.num_q]], dim=0)
-        self.codebook_weights = torch.nn.Parameter(codebook_weights, requires_grad=train_codebooks)
-        self.bandwidths = bandwidths
-
-    @torch.no_grad()
-    def get_encodec_codes(self, audio):
-        audio = audio.unsqueeze(1)
-        emb = self.encodec.encoder(audio)
-        codes = self.encodec.quantizer.encode(emb, self.encodec.frame_rate, self.encodec.bandwidth)
-        return codes
-
-    def forward(self, audio: torch.Tensor, **kwargs):
-        bandwidth_id = kwargs.get("bandwidth_id")
-        if bandwidth_id is None:
-            raise ValueError("The 'bandwidth_id' argument is required")
-        self.encodec.eval()  # Force eval mode as Pytorch Lightning automatically sets child modules to training mode
-        self.encodec.set_target_bandwidth(self.bandwidths[bandwidth_id])
-        codes = self.get_encodec_codes(audio)
-        # Instead of summing in the loop, it stores subsequent VQ dictionaries in a single `self.codebook_weights`
-        # with offsets given by the number of bins, and finally summed in a vectorized operation.
-        offsets = torch.arange(
-            0, self.encodec.quantizer.bins * len(codes), self.encodec.quantizer.bins, device=audio.device
-        )
-        embeddings_idxs = codes + offsets.view(-1, 1, 1)
-        features = torch.nn.functional.embedding(embeddings_idxs, self.codebook_weights).sum(dim=0)
-        return features.transpose(1, 2)
+if __name__ == "__main__":
+    # Test MelSpectrogramFeatures
+    mel_extractor = MelSpectrogramFeatures(
+        sample_rate = 24000,
+        n_fft = 1024,
+        hop_length = 256,
+        n_mels = 100,
+        padding = "center")
+    dummy_audio = torch.randn(2, 16000)  # Batch of 2 audio samples, each 1 second at 16kHz
+    mel_features = mel_extractor(dummy_audio)
+    print("Mel Spectrogram Features shape:", mel_features.shape)
