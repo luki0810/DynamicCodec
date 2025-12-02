@@ -7,13 +7,13 @@ import os
 from audiotools import AudioSignal
 import soundfile
 
-from data.ssl.repr import ssl_model
+from data.repr import ssl_model
 from data.melspec import mel_model
 from model.utils.util import to_scalar, pretty_shape
 from model.build import DynamicTask
 from model.utils.dynamic_argbind_loader import load_config_for_argbind
 
-def out_print(model, out):
+def out_print(model, out, input):
     # output result
     print("\n=== DynamicCodec Test Run ===")
     print(f"device           : {model.device}")
@@ -23,7 +23,7 @@ def out_print(model, out):
     if hasattr(model, 'latent_dim'):
         print(f"latent_dim       : {model.latent_dim}")
 
-
+    print(pretty_shape("input audio", input))
     print(pretty_shape("recon audio", out.get("audio")))
     print(pretty_shape("z", out.get("z")))
     print(pretty_shape("codes", out.get("codes")))
@@ -112,7 +112,7 @@ def main(load_path: str = None, save_path: str = None):
 
         
     # output    
-    out_print(model, out)
+    out_print(model, out, signal.audio_data)
     
     if args['save'] is True:
         # save output audio
@@ -120,19 +120,6 @@ def main(load_path: str = None, save_path: str = None):
         soundfile.write(Path(save_path)/ "recon.wav", recon_audio, sample_rate)
         print(f"[INFO] Saved reconstructed audio to {Path(save_path)/ 'recon.wav'}")
     
-    
-    
-"""
-    if input_format == 'repr':
-        # get_ssl_model
-        with argbind.scope(args):
-            reader = ssl_model()
-        # inference ssl
-        frames = soundfile.info(fname).frames
-        feat = reader.get_feats(fname, frames)
-        feat = feat.unsqueeze(0)
-        feat = feat.transpose(1, 2).to(device)
-"""
 
 
 if __name__ == "__main__":

@@ -16,7 +16,6 @@ from model.all_choices import encoder_choices, decoder_choices, quantizer_choice
 
 from model.utils.class_choice.get_default_kwargs import get_default_kwargs
 from model.utils.class_choice.nested_dict_action import NestedDictAction
-from model.utils.class_choice.types import float_or_none, int_or_none, str2bool, str_or_none
 
 
 
@@ -224,7 +223,7 @@ class DynamicTask:
                 feature_extractor_model = mel_model()
         elif input_format == "repr":
             with argbind.scope(args):
-                from data.ssl.repr import ssl_model
+                from data.repr import ssl_model
                 feature_extractor_model = ssl_model()
 
         # 6) combination

@@ -1,6 +1,6 @@
 $include:
   - conf/&{state}.yaml
-  - conf/input_format/&{input_format}.yaml
+  - conf/input/&{input_format}.yaml
   - conf/model/encoder/&{encoder}.yaml
   - conf/model/decoder/&{decoder}.yaml
   - conf/model/quantizer/&{quantizer}.yaml

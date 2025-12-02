@@ -25,6 +25,8 @@ def instantiate_class(args: Union[Any, Tuple[Any, ...]], init: Dict[str, Any]) -
     if not isinstance(args, tuple):
         args = (args,)
     class_module, class_name = init["class_path"].rsplit(".", 1)
+    # from local module
+    class_module = "model.vocoder." + class_module
     module = __import__(class_module, fromlist=[class_name])
     args_class = getattr(module, class_name)
     return args_class(*args, **kwargs)
