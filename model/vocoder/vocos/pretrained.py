@@ -27,7 +27,7 @@ def instantiate_class(args: Union[Any, Tuple[Any, ...]], init: Dict[str, Any]) -
     if not isinstance(args, tuple):
         args = (args,)
     class_module, class_name = init["class_path"].rsplit(".", 1)
-    # TODO:
+    # TODO: 需要使用更加安全的动态导入方法，此处为硬编码
     class_module = "model.vocoder." + class_module
     module = __import__(class_module, fromlist=[class_name])
     args_class = getattr(module, class_name)

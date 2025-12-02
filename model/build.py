@@ -16,6 +16,8 @@ from model.all_choices import encoder_choices, decoder_choices, quantizer_choice
 from model.utils.class_choice.get_default_kwargs import get_default_kwargs
 from model.utils.class_choice.nested_dict_action import NestedDictAction
 
+import logging
+logger = logging.getLogger(__name__)
 
 
 def init_weights(m):
@@ -194,6 +196,7 @@ class DynamicTask:
         decoder: str = "error",
         vocoder: str = None,
     ) -> nn.Module:
+        logger.info(f"Building model with encoder={encoder}, quantizer={quantizer}, decoder={decoder}, vocoder={vocoder}, input_format={input_format}")
         # 1) encoder
         enc_cls = encoder_choices.get_class(encoder)
         enc_cls = argbind.bind(enc_cls, without_prefix=True)
@@ -211,27 +214,30 @@ class DynamicTask:
         
         # 4) vocoder
         vo = None
-        if vocoder is not None:
-            from model.vocoder.vocos.pretrained import Vocos
-            vo = Vocos.from_pretrained("charactr/vocos-mel-24khz")
-            # v_cls = vocoder_choices.get_class(vocoder)
-            # v_cls = argbind.bind(v_cls, without_prefix=False)
-            # vo = v_cls()
+        if vocoder is not None:         
+            # from pretrained
+            # from model.vocoder.vocos.pretrained import Vocos
+            # vo = Vocos.from_pretrained("charactr/vocos-mel-24khz")
+            
+            # from choice
+            v_cls = vocoder_choices.get_class(vocoder)
+            v_cls = argbind.bind(v_cls, without_prefix=False)
+            vo = v_cls()
             
         # 5) feature_extractor
-        feature_extractor_model = None
+        fem = None
         if input_format == "melspec":
             with argbind.scope(args):
                 from data.melspec import mel_model
-                feature_extractor_model = mel_model()
+                fem = mel_model()
         elif input_format == "repr":
             with argbind.scope(args):
                 from data.repr import ssl_model
-                feature_extractor_model = ssl_model()
+                fem = ssl_model()
 
         # 6) combination
         model = DynamicCodec(
-            feature_extractor=feature_extractor_model,
+            feature_extractor=fem,
             encoder=enc,
             quantizer=qtz,
             decoder=dec,
