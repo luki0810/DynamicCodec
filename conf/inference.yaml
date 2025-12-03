@@ -9,4 +9,3 @@ seed: 42
 device: cuda:1
 ssl_model.device: cuda:1
 batch_size: 1
-save: true

@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchaudio
 
 from model.all_choices import *
 from model.utils.abs_class import AbsConvCodec
@@ -16,8 +17,7 @@ from model.all_choices import encoder_choices, decoder_choices, quantizer_choice
 from model.utils.class_choice.get_default_kwargs import get_default_kwargs
 from model.utils.class_choice.nested_dict_action import NestedDictAction
 
-import logging
-logger = logging.getLogger(__name__)
+from model.utils.logger import logger
 
 
 def init_weights(m):
@@ -25,6 +25,8 @@ def init_weights(m):
         nn.init.trunc_normal_(m.weight, std=0.02)
         if getattr(m, "bias", None) is not None:
             nn.init.constant_(m.bias, 0)
+
+
 
 @argbind.bind(without_prefix=False)
 class DynamicDiscriminator(AbsDiscriminator):
@@ -93,7 +95,7 @@ class DynamicDiscriminatorTask:
 class DynamicCodec(AbsConvCodec):
     def __init__(
         self,
-        sample_rate: int = 44100,
+        sample_rate: int = 66666,
         encoder_rates: List[int] = [2, 4, 8, 8],
         feature_extractor: Optional[nn.Module] = None,
         encoder: Optional[nn.Module] = None,
@@ -133,8 +135,18 @@ class DynamicCodec(AbsConvCodec):
     def preprocess(self, audio_data: torch.Tensor, sample_rate: Optional[int]):
         # sr alignment
         if sample_rate is None:
-            sample_rate = self.sample_rate
+            sample_rate = self.sample_rate   
+              
+        # resample if needed
+        # elif sample_rate != self.sample_rate:
+        #     audio_data = torchaudio.functional.resample(
+        #         waveform=audio_data,
+        #         orig_freq=sample_rate,
+        #         new_freq=self.sample_rate
+        #     )
+        # sample_rate = self.sample_rate
         assert sample_rate == self.sample_rate
+            
             
         # down-sample & up-sample | guaranteed effective recovery
         length = audio_data.shape[-1]
@@ -167,7 +179,9 @@ class DynamicCodec(AbsConvCodec):
         sample_rate: Optional[int] = None,
     ):
         length = audio_data.shape[-1]
+        # logger.info(f"Input audio shape: {audio_data.shape}, sample_rate: {sample_rate}")
         audio_data = self.preprocess(audio_data, sample_rate)
+        # logger.info(f"Preprocessed audio shape: {audio_data.shape}, sample_rate: {self.sample_rate}")  
 
         z, codes, latents, loss_dict, other = self.encode(
             audio_data
@@ -214,7 +228,8 @@ class DynamicTask:
         
         # 4) vocoder
         vo = None
-        if vocoder is not None:         
+        if vocoder is not None:
+            logger.info(f"Building vocoder: {vocoder}")         
             # from pretrained
             # from model.vocoder.vocos.pretrained import Vocos
             # vo = Vocos.from_pretrained("charactr/vocos-mel-24khz")
@@ -227,29 +242,33 @@ class DynamicTask:
         # 5) feature_extractor
         fem = None
         if input_format == "melspec":
+            logger.info("Building mel spectrogram feature extractor")
             with argbind.scope(args):
                 from data.melspec import mel_model
                 fem = mel_model()
         elif input_format == "repr":
+            logger.info("Building SSL feature extractor")
             with argbind.scope(args):
                 from data.repr import ssl_model
                 fem = ssl_model()
 
         # 6) combination
-        model = DynamicCodec(
-            feature_extractor=fem,
-            encoder=enc,
-            quantizer=qtz,
-            decoder=dec,
-            vocoder=vo
-        )
+        Dyc = argbind.bind(DynamicCodec, without_prefix=True)
+        with argbind.scope(args):
+            model = Dyc(
+                feature_extractor=fem,
+                encoder=enc,
+                quantizer=qtz,
+                decoder=dec,
+                vocoder=vo
+            )
+        logger.info("Dynamic model built successfully")
         return model
     
     @classmethod
     def load_from_folder(cls, **kwargs):
         return DynamicCodec.load_from_folder(**kwargs)
     
-
 
 if __name__ == "__main__":
     print(get_default_kwargs(DynamicCodec))

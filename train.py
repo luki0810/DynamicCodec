@@ -17,18 +17,22 @@ from audiotools.data import transforms # audio data transform to tensor
 import model
 from model.build import DynamicTask, DynamicCodec as DyC, DynamicDiscriminatorTask, DynamicDiscriminator as DyD
 from model.utils.dynamic_argbind_loader import load_config_for_argbind
+from model.utils.logger import logger
+
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
 torch.backends.cudnn.benchmark = bool(int(os.getenv("CUDNN_BENCHMARK", 1)))
 
+
+
 def _dump_args(args, save_path):
     if save_path.exists():
         try:
             os.remove(save_path)
-            print(f"[INFO] Removed existing file: {save_path}")
+            logger.info(f"[INFO] Removed existing file: {save_path}")
         except Exception as e:
-            print(f"[WARN] Could not remove {save_path}: {e}")      
+            logger.info(f"[WARN] Could not remove {save_path}: {e}")      
     argbind.dump_args(args, save_path)
 
 DynamicCodec = argbind.bind(DyC)
@@ -176,7 +180,7 @@ def load(
     else:
         tracker.print("No parameters specified for loading, randomly initialized generator and discriminator")
         with argbind.scope(args):
-            generator = DynamicTask.build_model() # from args
+            generator = DynamicTask.build_model(args) # from args
             discriminator = DynamicDiscriminatorTask.build_disc() if discriminator is None else discriminator
 
     generator = accel.prepare_model(generator)
@@ -453,6 +457,7 @@ def train(
     # load model, optimizer, scheduler, data
     state = load(args, accel, tracker, log_path)
 
+
     # dump args and log
     if int(os.getenv("LOCAL_RANK", 0)) == 0:
         argbind.dump_args(args, Path(log_path) / "args.yaml")
@@ -523,11 +528,11 @@ def train(
 
 
 @argbind.bind(without_prefix=True)
-def main(load_path: str = None, save_path: str = None):
+def main(conf_path: str = None, save_path: str = None):
     cli = argbind.parse_args(argv=sys.argv)
-    load_path = cli.get("load_path", load_path)
+    conf_path = cli.get("conf_path", conf_path)
     save_path = cli.get("save_path", save_path)
-    cfg = load_config_for_argbind(main_yaml=load_path)
+    cfg = load_config_for_argbind(main_yaml=conf_path)
     args = argbind.parse_args(argv=sys.argv)
     args.update(cfg)
     

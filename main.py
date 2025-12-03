@@ -11,9 +11,8 @@ import soundfile
 from model.utils.util import pretty_shape
 from model.build import DynamicTask
 from model.utils.dynamic_argbind_loader import load_config_for_argbind
+from model.utils.logger import logger
 
-import logging
-logger = logging.getLogger("main")
 
 
 def out_print(model, out, input):
@@ -47,25 +46,26 @@ def _dump_args(args, save_path):
     argbind.dump_args(args, save_path)
 
 @argbind.bind(without_prefix=True)
-def main(load_path: str = None, save_path: str = None):
-    # dynamic load with ${encoder}, ${decoder}, ${quantizer}
+def main(conf_path: str = None, save_path: str = None):
+    # dynamic load with ${encoder}, ${decoder}, ${quantizer} etc.
     # 这里的dynamic load相当于全部载入，不会检查argbind.unknown
     cli = argbind.parse_args(argv=sys.argv)
-    load_path = cli.get("load_path", load_path)
+    conf_path = cli.get("conf_path", conf_path)
     save_path = cli.get("save_path", save_path)
-    cfg = load_config_for_argbind(main_yaml=load_path)
+    cfg = load_config_for_argbind(main_yaml=conf_path)
     args = argbind.parse_args(argv=sys.argv)
     args.update(cfg)
     argpath = Path(save_path)/ "args.yaml"
-    _dump_args(args=args, save_path=argpath) # 可以到save_path查看当前使用的args.yaml
+    _dump_args(args=args, save_path=argpath) 
+    # 可以到save_path查看当前使用的args.yaml
+    # 复现可以直接使用 --conf_path ${save_path}/args.yaml
   
     # seed
     seed = args['seed']
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    # args
-    sample_rate = args["sample_rate"]
+    # device
     device = args["device"]
         
     # resume load
@@ -97,18 +97,17 @@ def main(load_path: str = None, save_path: str = None):
     signal.to(model.device)
     model.eval()
     with torch.no_grad():
+        logger.info(f"Processing input audio: {fname}")
         out = model(signal.audio_data, signal.sample_rate)
-
-
         
     # output    
     out_print(model, out, signal.audio_data)
     
-    if args['save'] is True:
-        # save output audio
-        recon_audio = out["audio"].squeeze().cpu().numpy()
-        soundfile.write(Path(save_path)/ "recon.wav", recon_audio, sample_rate)
-        logger.info(f"Saved reconstructed audio to {Path(save_path)/ 'recon.wav'}")
+    
+    # save output audio
+    recon_audio = out["audio"].squeeze().cpu().numpy()
+    soundfile.write(Path(save_path)/ "recon.wav", recon_audio, model.sample_rate)
+    logger.info(f"Saved reconstructed audio to {Path(save_path)/ 'recon.wav'}, sample_rate={model.sample_rate}")
     
 
 
