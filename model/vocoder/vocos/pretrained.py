@@ -148,10 +148,11 @@ class Vocos(nn.Module):
         """
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
+            print(config)
         feature_extractor = instantiate_class(args=(), init=config["feature_extractor"])
         backbone = instantiate_class(args=(), init=config["backbone"])
         head = instantiate_class(args=(), init=config["head"])
-        model = cls(feature_extractor=feature_extractor, backbone=backbone, head=head)
+        model = cls(feature_extractor=None, backbone=backbone, head=head)
         return model
 
     @classmethod
@@ -163,6 +164,10 @@ class Vocos(nn.Module):
         model_path = hf_hub_download(repo_id=repo_id, filename="pytorch_model.bin", revision=revision)
         model = cls.from_hparams(config_path)
         state_dict = torch.load(model_path, map_location="cpu")
+
+        import pdb
+        pdb.set_trace()
+
         model.load_state_dict(state_dict)
         model.eval()
         return model

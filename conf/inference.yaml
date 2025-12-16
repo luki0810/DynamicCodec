@@ -6,6 +6,6 @@ resume: false  # path to checkpoint to resume training from
 exp_name: dac+dac
 tag: best
 seed: 42
-device: cuda:1
-ssl_model.device: cuda:1
+device: cuda:0
+ssl_model.device: cuda:0
 batch_size: 1

@@ -1,4 +1,4 @@
-input_channels: 1024
+input_channels: 768
 encode_channels: 1024
 code_dim: 128
 channel_ratios: [1, 1]

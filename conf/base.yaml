@@ -10,10 +10,10 @@ $include:
 
 
 # model component
-state: inference # train/inference
-input_format: wav # repr/wav/melspec
-encoder: dac
+state: train # train/inference
+input_format: melspec # repr/wav/melspec
+encoder: mel
 quantizer: rvq
-decoder: dac
-vocoder: null
-# vocoder: null
+decoder: mel
+vocoder: vocos
+# vocoder: null/vocos

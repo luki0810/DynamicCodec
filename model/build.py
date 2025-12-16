@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchaudio
 
+from model.utils.mel_pad import right_pad_to_multiple, match_length_lastdim
 from model.all_choices import *
 from model.utils.abs_class import AbsConvCodec
 from model.utils.abs_class import AbsDiscriminator
@@ -96,7 +97,6 @@ class DynamicCodec(AbsConvCodec):
     def __init__(
         self,
         sample_rate: int = 66666,
-        encoder_rates: List[int] = [2, 4, 8, 8],
         feature_extractor: Optional[nn.Module] = None,
         encoder: Optional[nn.Module] = None,
         quantizer: Optional[nn.Module] = None,
@@ -110,7 +110,7 @@ class DynamicCodec(AbsConvCodec):
 
         # --- important parameters ---
         self.sample_rate = sample_rate
-        self.hop_length = int(np.prod(encoder_rates))
+        
 
         # --- module check ---
         if encoder is None or quantizer is None or decoder is None:
@@ -135,29 +135,64 @@ class DynamicCodec(AbsConvCodec):
     def preprocess(self, audio_data: torch.Tensor, sample_rate: Optional[int]):
         # sr alignment
         if sample_rate is None:
-            sample_rate = self.sample_rate   
-              
-        # resample if needed
-        # elif sample_rate != self.sample_rate:
-        #     audio_data = torchaudio.functional.resample(
-        #         waveform=audio_data,
-        #         orig_freq=sample_rate,
-        #         new_freq=self.sample_rate
-        #     )
-        # sample_rate = self.sample_rate
+            sample_rate = self.sample_rate
         assert sample_rate == self.sample_rate
-            
-            
-        # down-sample & up-sample | guaranteed effective recovery
-        length = audio_data.shape[-1]
-        right_pad = math.ceil(length / self.hop_length) * self.hop_length - length
-        if right_pad > 0:
-            audio_data = F.pad(audio_data, (0, right_pad))
 
-        if self.feature_extractor is not None:
-            audio_data = self.feature_extractor(audio_data)          
+        # Normalize shape: allow (B,T) or (B,1,T) or (B,C,T)
+        if audio_data.dim() == 2:
+            audio_data = audio_data.unsqueeze(1)
 
-        return audio_data
+        raw_length = audio_data.shape[-1]  # 原始 wav 长度（samples）
+
+        from data.melspec import MelSpectrogramFeatures
+        # input: wav (no feature extractor)
+        if self.feature_extractor is None:
+            length = raw_length
+            hop_length = int(np.prod(self.encoder.encoder_rates))
+
+            # down-sample & up-sample | guaranteed effective recovery (codec hop)
+            right_pad = math.ceil(raw_length / hop_length) * hop_length - raw_length
+            if right_pad > 0:
+                audio_data = F.pad(audio_data, (0, right_pad))
+
+            pad_info = {
+                "domain": "wav",
+                "raw_length": raw_length,
+                "padded_raw_length": audio_data.shape[-1],
+                "feat_length": None,
+                "padded_feat_length": None,
+            }
+            return audio_data, length, pad_info
+
+        # mel input (wav -> mel -> pad in mel domain)
+        elif isinstance(self.feature_extractor, MelSpectrogramFeatures):
+            mel = self.feature_extractor(audio_data)  # (B, n_mels, L)
+            mel, feat_length = right_pad_to_multiple(mel, self.vocoder.hop_length, dim=-1)
+
+            # 这里 length 对于“无 vocoder，仅重建 mel”时，裁剪回原始 mel 帧长
+            # 但如果你有 vocoder，并且最终输出 wav，我们仍然要裁 raw_length
+            length = feat_length
+
+            pad_info = {
+                "domain": "mel",
+                "raw_length": raw_length,
+                "padded_raw_length": None,          
+                "feat_length": feat_length,
+                "padded_feat_length": mel.shape[-1], # pad 后的 mel 帧长
+            }
+            return mel, length, pad_info
+
+        # ssl input
+        else:
+            length = raw_length
+            pad_info = {
+                "domain": "ssl",
+                "raw_length": raw_length,
+                "padded_raw_length": None,
+                "feat_length": None,
+                "padded_feat_length": None,
+            }
+            return audio_data, length, pad_info
 
     def encode(self, audio_data: torch.Tensor):
         # encoder: B x 1 x T -> B x D x T'
@@ -171,30 +206,62 @@ class DynamicCodec(AbsConvCodec):
         z_hat = self.decoder(z)
         if self.vocoder is not None:
             z_hat = self.vocoder.decode(z_hat)
+            if z_hat.dim() == 2:
+                z_hat = z_hat.unsqueeze(1)
         return z_hat
 
-    def forward(
-        self,
-        audio_data: torch.Tensor,
-        sample_rate: Optional[int] = None,
-    ):
-        length = audio_data.shape[-1]
-        # logger.info(f"Input audio shape: {audio_data.shape}, sample_rate: {sample_rate}")
-        audio_data = self.preprocess(audio_data, sample_rate)
-        # logger.info(f"Preprocessed audio shape: {audio_data.shape}, sample_rate: {self.sample_rate}")  
+    def forward(self, audio_data: torch.Tensor, sample_rate: Optional[int] = None):
+        # 保留原始输入长度（samples 或 mel frames 取决于你喂的是什么）
+        # 但我们最终以 preprocess 的 pad_info 决定裁剪逻辑
+        x_pad, length, pad_info = self.preprocess(audio_data, sample_rate)
 
-        z, codes, latents, loss_dict, other = self.encode(
-            audio_data
-        )
-        x = self.decode(z)
+        z, codes, latents, loss_dict, other = self.encode(x_pad)
+        x_hat = self.decode(z)
+
+        # ---------- length alignment ----------
+        if self.vocoder is not None:
+            # vocoder 输出 wav: (B, 1, T) 或 (B, T) -> 统一到 (B, 1, T)
+            if x_hat.dim() == 2:
+                x_hat = x_hat.unsqueeze(1)
+
+            target_raw_len = int(pad_info["raw_length"])
+
+            # 可选：若你希望先对齐到“padded raw len”，可以尝试推一个目标长度
+            # 1) input domain wav
+            if pad_info["domain"] == "wav":
+                padded_raw_len = int(pad_info["padded_raw_length"])
+                x_hat = match_length_lastdim(x_hat, padded_raw_len)
+
+            # 2) input domain mel，且你能拿到 vocoder hop_length，则可以先对齐到 padded_feat_len * hop
+            elif pad_info["domain"] == "mel":
+                hop = None
+                if hasattr(self.vocoder, "hop_length"):
+                    hop = int(self.vocoder.hop_length)
+                elif hasattr(self.vocoder, "head") and hasattr(self.vocoder.head, "hop_length"):
+                    hop = int(self.vocoder.head.hop_length)
+
+                if hop is not None:
+                    padded_raw_len = int(pad_info["padded_feat_length"]) * hop
+                    x_hat = match_length_lastdim(x_hat, padded_raw_len)
+            else: # ssl input
+                pass
+
+            # 最终严格裁回原始 wav 长度
+            x_hat = x_hat[..., :target_raw_len]
+
+            out_audio = x_hat
+
+        else:
+            # no vocoder: output is feature domain (mel/features)
+            out_audio = x_hat[..., :length]
 
         return {
-            "audio": x[..., :length], # recons waveform
+            "audio": out_audio,
             "z": z,
             "codes": codes,
             "latents": latents,
             "loss": loss_dict,
-            "other": other
+            "other": other,
         }
         
 @argbind.bind(without_prefix=True)
@@ -231,13 +298,13 @@ class DynamicTask:
         if vocoder is not None:
             logger.info(f"Building vocoder: {vocoder}")         
             # from pretrained
-            # from model.vocoder.vocos.pretrained import Vocos
-            # vo = Vocos.from_pretrained("charactr/vocos-mel-24khz")
+            from model.vocoder.voco_istft import Vocoder as Vocos
+            vo = Vocos.from_pretrained("charactr/vocos-mel-24khz")
             
             # from choice
-            v_cls = vocoder_choices.get_class(vocoder)
-            v_cls = argbind.bind(v_cls, without_prefix=False)
-            vo = v_cls()
+            # v_cls = vocoder_choices.get_class(vocoder)
+            # v_cls = argbind.bind(v_cls, without_prefix=False)
+            # vo = v_cls()
             
         # 5) feature_extractor
         fem = None

@@ -246,14 +246,14 @@ def train_loop(state, batch, accel, lambdas):
 
     # for p in state.discriminator.parameters():
     #     p.requires_grad_(True)
-
+    # signal.audio_data.shape recons.audio_data.shape
     with accel.autocast():
         out = state.generator(signal.audio_data, signal.sample_rate)
         recons = AudioSignal(out["audio"], signal.sample_rate)
+        
         # ===============================================
         model_loss_dict = out.get("loss", {}) or {}
         # ===============================================
-
     with accel.autocast():
         output["adv/disc_loss"] = state.gan_loss.discriminator_loss(recons, signal)
 
@@ -266,7 +266,6 @@ def train_loop(state, batch, accel, lambdas):
     accel.step(state.optimizer_d)
     state.scheduler_d.step()
 
-    
     
     with accel.autocast():
         output["stft/loss"] = state.stft_loss(recons, signal)

@@ -14,15 +14,15 @@ VolumeNorm.db: [const, -16]
 # dataset folder
 train/build_dataset.folders:
   VCTK:
-    - /mnt/speech/luyongkang/datasets/VCTK/all_wav_48/train
+    - /data/L202500019/datasets/VCTK/all_wav_48/train
 
 val/build_dataset.folders:
   VCTK:
-    - /mnt/speech/luyongkang/datasets/VCTK/all_wav_48/val
+    - /data/L202500019/datasets/VCTK/all_wav_48/val
 
 test/build_dataset.folders:
   VCTK:
-    - /mnt/speech/luyongkang/datasets/VCTK/all_wav_48/test
+    - /data/L202500019/datasets/VCTK/all_wav_48/test
 
 
 # Data
