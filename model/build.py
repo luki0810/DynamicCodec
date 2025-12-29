@@ -195,7 +195,6 @@ class DynamicCodec(AbsConvCodec):
             return audio_data, length, pad_info
 
     def encode(self, audio_data: torch.Tensor):
-        # encoder: B x 1 x T -> B x D x T'
         z = self.encoder(audio_data)
         z_q, codes, latents, loss_dict, other = self.quantizer(
             z
@@ -203,6 +202,7 @@ class DynamicCodec(AbsConvCodec):
         return z_q, codes, latents, loss_dict, other
 
     def decode(self, z: torch.Tensor):
+        # z.shape (B, C, T)
         z_hat = self.decoder(z)
         if self.vocoder is not None:
             z_hat = self.vocoder.decode(z_hat)
@@ -298,13 +298,13 @@ class DynamicTask:
         if vocoder is not None:
             logger.info(f"Building vocoder: {vocoder}")         
             # from pretrained
-            from model.vocoder.voco_istft import Vocoder as Vocos
-            vo = Vocos.from_pretrained("charactr/vocos-mel-24khz")
+            # from model.vocoder.voco_istft import Vocoder as Vocos
+            # vo = Vocos.from_pretrained("ckpt/models--charactr--vocos-mel-24khz/snapshots/0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21")
             
             # from choice
-            # v_cls = vocoder_choices.get_class(vocoder)
-            # v_cls = argbind.bind(v_cls, without_prefix=False)
-            # vo = v_cls()
+            v_cls = vocoder_choices.get_class(vocoder)
+            v_cls = argbind.bind(v_cls, without_prefix=False)
+            vo = v_cls()
             
         # 5) feature_extractor
         fem = None

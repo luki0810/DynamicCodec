@@ -73,5 +73,7 @@ class Encoder(AbsEncoder):
         self.block = nn.Sequential(*self.block)
         self.o_dim = latent_dim
         
+        self.encoder_rates = encoder_rates
+
     def forward(self, x):
         return self.block(x)

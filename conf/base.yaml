@@ -12,8 +12,8 @@ $include:
 # model component
 state: train # train/inference
 input_format: melspec # repr/wav/melspec
-encoder: mel
+encoder: cosmos
 quantizer: rvq
-decoder: mel
+decoder: cosmos
 vocoder: vocos
 # vocoder: null/vocos

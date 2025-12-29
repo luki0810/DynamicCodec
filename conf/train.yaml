@@ -8,7 +8,7 @@ $include:
 
 # train.py def load()
 # without_prefix = false
-load.resume: false
+load.resume: true
 load.tag: latest
 load.only_load_weights: true
 
@@ -26,14 +26,14 @@ val_batch_size: 12
 num_workers: 8
 val_idx: [0, 1, 2, 3, 4, 5, 6, 7]
 lambdas: 
-  mel/loss: 50.0
+  mel/loss: 45.0
   # waveform/loss: 1.0
   stft/loss: 1.0
   commitment_loss: 0.25
   codebook_loss: 1.0 # for rvq and vq
   # entropy_penalty: 1.0 # for bsq
-  adv/feat_loss: 2.0
-  adv/gen_loss": 1.0
+  adv/feat_loss: 0.5
+  adv/gen_loss": 0.5
 
   
 # Accelerator

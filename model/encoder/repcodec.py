@@ -112,6 +112,8 @@ class Encoder(AbsEncoder):
             bias=False
         )
 
+        self.encoder_rates = strides
+
     def forward(self, x):
         x = self.conv(x)
         for i in range(self.num_blocks):

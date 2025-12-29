@@ -1,4 +1,4 @@
 n_mels: 100
-encoder_dim: 256
+encoder_dim: 1024
 encoder_rates: [2, 2, 2]
-latent_dim: 256
+latent_dim: 1024

@@ -52,10 +52,10 @@ class _DecoderBlock(nn.Module):
         x = self.upsample(x)
         x = self.res_blocks(x)
         return x
-    
-    
-    
-    
+
+
+
+ 
 class Decoder(AbsDecoder):
     def __init__(
         self,

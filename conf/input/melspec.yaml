@@ -1,5 +1,5 @@
 mel_model.sample_rate: 24000
 mel_model.n_fft: 1024
 mel_model.hop_length: 256
-mel_model.n_mels: 100
+mel_model.n_mels: 96
 mel_model.padding: center

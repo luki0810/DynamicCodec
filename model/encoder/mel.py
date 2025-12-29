@@ -88,6 +88,8 @@ class Encoder(AbsEncoder):
             ds *= s
         self.downsample_factor = ds
 
+        self.encoder_rates = encoder_rates
+
     def forward(self, mel: torch.Tensor) -> torch.Tensor:
         """
         mel: (B, n_mels, T)

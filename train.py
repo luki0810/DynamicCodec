@@ -171,6 +171,8 @@ def load(
         # |-latest
         # ||-dynamiccodec
         # ||-dynamicdiscriminator
+        import pdb
+        pdb.set_trace()
         if (Path(kwargs["folder"]) / "dynamiccodec").exists():
             with argbind.scope(args):
                 generator, g_extra = DynamicTask.load_from_folder(**kwargs)
@@ -448,7 +450,11 @@ def train(
     
     # writer, tracker and dump_args
     Path(log_path).mkdir(exist_ok=True, parents=True)
-    writer = (SummaryWriter(log_dir=f"{log_path}/logs") if accel.local_rank == 0 else None)
+
+    from datetime import datetime
+    exp_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # writer = SummaryWriter(log_dir=f"{log_path}/logs/{exp_name}")
+    writer = (SummaryWriter(log_dir=f"{log_path}/logs/{exp_name}") if accel.local_rank == 0 else None)
     tracker = Tracker(writer=writer, log_file=f"{log_path}/log.txt", rank=accel.local_rank)
     if int(os.getenv("LOCAL_RANK", 0)) == 0:
         _dump_args(args=args, save_path=Path(log_path)/ "args.yaml")

@@ -1,4 +1,4 @@
-latent_dim: 128
+latent_dim: 1024
 n_codebooks: 8
 codebook_size: 1024
 codebook_dim: 8

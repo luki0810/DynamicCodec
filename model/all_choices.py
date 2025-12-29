@@ -11,8 +11,10 @@ from model.decoder.dac import Decoder as dac_Decoder
 from model.encoder.encodec import Encoder as encodec_Encoder
 from model.decoder.encodec import Decoder as encodec_Decoder
 from model.encoder.repcodec import Encoder as repcodec_Encoder
-from model.encoder.mel import Encoder as MelEncoder
-from model.decoder.mel import Decoder as MelDecoder
+from model.encoder.mel import Encoder as mel_Encoder
+from model.decoder.mel import Decoder as mel_Decoder
+from model.encoder.cosmos import Encoder as cosmos_Encoder
+from model.decoder.cosmos import Decoder as cosmos_Decoder
 
 # Vocoder import
 from model.vocoder.voco_istft import Vocoder as Vocos
@@ -29,7 +31,8 @@ encoder_choices = ClassChoices(
         dac=dac_Encoder,
         encodec=encodec_Encoder,
         repcodec=repcodec_Encoder,
-        mel = MelEncoder
+        mel = mel_Encoder,
+        cosmos = cosmos_Encoder
     ),
     type_check=AbsEncoder,
     default="default",
@@ -53,7 +56,8 @@ decoder_choices = ClassChoices(
         default=dac_Decoder,
         dac=dac_Decoder,
         encodec=encodec_Decoder,
-        mel = MelDecoder
+        mel = mel_Decoder,
+        cosmos = cosmos_Decoder
     ),
     type_check=AbsDecoder,
     default="default",
