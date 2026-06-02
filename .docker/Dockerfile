@@ -50,6 +50,23 @@ RUN pip install --upgrade pip && \
         accelerate \
         tensorboard
 
+# SSL feature path (data2vec / hubert / whisper) needs fairseq + openai-whisper.
+# fairseq 0.12.2 pins omegaconf<2.1; omegaconf 2.0.6's metadata trips newer
+# pip's PEP 440 validation, so we drop pip to 24.0 just for this layer, then
+# restore the latest in a follow-up step.
+RUN pip install 'pip==24.0' && \
+    pip install --no-deps \
+        fairseq==0.12.2 \
+        omegaconf==2.0.6 \
+        hydra-core==1.0.7 && \
+    pip install \
+        antlr4-python3-runtime==4.8 \
+        bitarray \
+        sacrebleu && \
+    pip install --only-binary :all: tiktoken && \
+    pip install openai-whisper && \
+    pip install --upgrade pip
+
 ENV PYTHONPATH=/app
 
 CMD ["bash"]

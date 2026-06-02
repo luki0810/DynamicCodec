@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
-# Bring the dyc_luki container into a state where main.py / train.py just work.
+# Bring the dyc_dev container into a state where main.py / train.py just work.
 #
 # Two image paths are supported:
 #
-#   1. Tencent internal mirror (default; fast):
-#        mirrors.tencent.com/dct/facodec_lukilu:v1.2
-#      Pulled if not present locally. Requires Tencent network access.
+#   1. Private/internal pre-built image (optional, fast):
+#        Configured via the DYC_INTERNAL_IMAGE env var, e.g.
+#          export DYC_INTERNAL_IMAGE=registry.example.com/team/dyc:v1
+#        Pulled if not present locally. Requires network access to that registry.
 #
-#   2. Public-friendly local build (fallback / external collaborators):
+#   2. Public local build (default / external collaborators):
 #        dynamiccodec:local
 #      Built from .docker/Dockerfile, based on pytorch/pytorch:2.6.0-cuda12.4
 #      from Docker Hub.
 #
-# The script tries the Tencent image first. If it cannot be pulled (no network
-# access to the mirror), it falls back to building the local image. You can
-# also force one path explicitly:
+# If DYC_INTERNAL_IMAGE is set, the script tries it first and falls back to the
+# public build when the pull fails. If unset, it goes straight to the public
+# build. You can also force the path explicitly:
 #
-#   bash scripts/setup_container.sh                  # auto: try Tencent, fallback to public
+#   bash scripts/setup_container.sh                  # auto (env-driven)
 #   bash scripts/setup_container.sh --public         # force the public local build
 #   bash scripts/setup_container.sh --image my:tag   # use whatever image you've prepared
 #   bash scripts/setup_container.sh --rm             # tear down container first
+#
+# Extra mounts:
+#   DYC_DATA_MOUNT=/host/path             → mount as /host/path in the container
+#   DYC_DATA_MOUNT=/host/path:/in/ctr     → explicit src:dst form
 #
 # Idempotent — re-running re-uses an existing healthy container, skips already-
 # installed pip packages, and the patch scripts no-op when already applied.
@@ -30,8 +35,8 @@
 #   3. Decide which image to use:
 #        - explicit --image <tag>  → use it as-is
 #        - explicit --public       → build .docker/Dockerfile → dynamiccodec:local
-#        - default                 → try Tencent image; if unreachable, build local
-#   4. Reuse-or-create the dyc_luki container with the project + /sec-cfs-nj mounted.
+#        - default                 → DYC_INTERNAL_IMAGE if set, else build local
+#   4. Reuse-or-create the dyc_dev container (with optional DYC_DATA_MOUNT).
 #   5. pip-install the project's pip dependencies (no-op if image already has them).
 #   6. Apply argbind / audiotools source patches (idempotent).
 #   7. Run smoke check.
@@ -40,9 +45,9 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TENCENT_IMAGE="mirrors.tencent.com/dct/facodec_lukilu:v1.2"
+INTERNAL_IMAGE="${DYC_INTERNAL_IMAGE:-}"
 LOCAL_IMAGE="dynamiccodec:local"
-NAME="dyc_luki"
+NAME="dyc_dev"
 
 # ---- arg parsing ----
 REMOVE_FIRST=false
@@ -123,20 +128,30 @@ elif $FORCE_PUBLIC; then
         echo "  reusing existing local image"
     fi
 else
-    # Auto path: prefer Tencent, fall back to local public build.
-    IMAGE="$TENCENT_IMAGE"
-    if have_image_locally "$IMAGE"; then
-        echo "  using local copy of $IMAGE"
-    else
-        echo "  $IMAGE not local; probing Tencent mirror..."
-        if try_pull "$IMAGE"; then
-            echo "  pulled from Tencent mirror"
+    # Auto path: prefer the configured internal image (if any), fall back to public build.
+    if [ -n "$INTERNAL_IMAGE" ]; then
+        IMAGE="$INTERNAL_IMAGE"
+        if have_image_locally "$IMAGE"; then
+            echo "  using local copy of $IMAGE"
         else
-            echo "  Tencent mirror unreachable, falling back to public build"
-            IMAGE="$LOCAL_IMAGE"
-            if ! have_image_locally "$IMAGE"; then
-                build_local_image
+            echo "  $IMAGE not local; probing internal registry..."
+            if try_pull "$IMAGE"; then
+                echo "  pulled from internal registry"
+            else
+                echo "  internal registry unreachable, falling back to public build"
+                IMAGE="$LOCAL_IMAGE"
+                if ! have_image_locally "$IMAGE"; then
+                    build_local_image
+                fi
             fi
+        fi
+    else
+        IMAGE="$LOCAL_IMAGE"
+        echo "  DYC_INTERNAL_IMAGE not set; using public build $IMAGE"
+        if ! have_image_locally "$IMAGE"; then
+            build_local_image
+        else
+            echo "  reusing existing local image"
         fi
     fi
 fi
@@ -158,16 +173,25 @@ if $DK ps -a --format '{{.Names}}' | grep -qx "$NAME"; then
         echo "  started existing container"
     fi
 else
-    # Mount /sec-cfs-nj only if it exists on the host (external machines won't have it).
-    cfs_mount=()
-    if [ -d /sec-cfs-nj ]; then
-        cfs_mount=(-v /sec-cfs-nj:/sec-cfs-nj)
-    else
-        echo "  note: /sec-cfs-nj not present on host; skipping that mount"
+    # Optional extra mount via DYC_DATA_MOUNT env var.
+    # Accepts either "/host/path" (mounted at the same path inside the container)
+    # or "/host/path:/in/container" for an explicit src:dst pair.
+    extra_mount=()
+    if [ -n "${DYC_DATA_MOUNT:-}" ]; then
+        case "$DYC_DATA_MOUNT" in
+            *:*) src="${DYC_DATA_MOUNT%%:*}" ;;
+              *) src="$DYC_DATA_MOUNT" ;;
+        esac
+        if [ -d "$src" ]; then
+            extra_mount=(-v "$DYC_DATA_MOUNT")
+            echo "  mounting DYC_DATA_MOUNT=$DYC_DATA_MOUNT"
+        else
+            echo "  note: DYC_DATA_MOUNT=$DYC_DATA_MOUNT does not exist on host; skipping"
+        fi
     fi
     $DK run -d \
         -v "$REPO_ROOT":/app \
-        "${cfs_mount[@]}" \
+        "${extra_mount[@]}" \
         -w /app \
         --gpus all \
         --network host \
@@ -185,6 +209,26 @@ $DK exec "$NAME" pip install --no-cache-dir --quiet \
     vocos==0.1.0 \
     typeguard \
     humanfriendly
+
+# SSL feature path (data2vec / hubert / whisper) needs fairseq + openai-whisper.
+# fairseq 0.12.2 pins omegaconf<2.1, whose metadata fails newer pip's PEP 440
+# validation. We pin pip to 24.0 just for these installs, then restore.
+echo "  installing SSL deps (fairseq / whisper / omegaconf 2.0.x)"
+ORIG_PIP=$($DK exec "$NAME" pip --version | awk '{print $2}')
+$DK exec "$NAME" pip install --no-cache-dir --quiet 'pip==24.0'
+$DK exec "$NAME" pip install --no-cache-dir --quiet --no-deps \
+    fairseq==0.12.2 \
+    omegaconf==2.0.6 \
+    hydra-core==1.0.7
+$DK exec "$NAME" pip install --no-cache-dir --quiet \
+    antlr4-python3-runtime==4.8 \
+    bitarray \
+    sacrebleu
+# tiktoken needs prebuilt wheel (no Rust in image)
+$DK exec "$NAME" pip install --no-cache-dir --quiet --only-binary :all: tiktoken
+$DK exec "$NAME" pip install --no-cache-dir --quiet openai-whisper
+# restore pip
+$DK exec "$NAME" pip install --no-cache-dir --quiet "pip==$ORIG_PIP" || true
 echo "  done"
 
 step 6/8 "apply patches"

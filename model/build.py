@@ -168,7 +168,15 @@ class DynamicCodec(AbsConvCodec):
         # mel input (wav -> mel -> pad in mel domain)
         elif isinstance(self.feature_extractor, MelSpectrogramFeatures):
             mel = self.feature_extractor(audio_data)  # (B, n_mels, L)
-            mel, feat_length = right_pad_to_multiple(mel, self.vocoder.hop_length, dim=-1)
+            # Pad to a hop multiple. When a vocoder is attached we use its
+            # hop_length (so its inverse STFT lines up); otherwise fall back to
+            # the mel extractor's own hop_length (mel-domain reconstruction).
+            hop = (
+                self.vocoder.hop_length
+                if self.vocoder is not None
+                else self.feature_extractor.hop_length
+            )
+            mel, feat_length = right_pad_to_multiple(mel, hop, dim=-1)
 
             # 这里 length 对于“无 vocoder，仅重建 mel”时，裁剪回原始 mel 帧长
             # 但如果你有 vocoder，并且最终输出 wav，我们仍然要裁 raw_length

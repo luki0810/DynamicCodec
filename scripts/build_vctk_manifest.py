@@ -17,15 +17,17 @@ Each CSV has a single column ``path`` containing absolute wav paths,
 which is the format audiotools.AudioLoader expects.
 
 The VCTK source directory is read-only — this script never writes anything
-under /sec-cfs-nj/lukilu/SpeechDataset/vctk/.
+under it. Configure the source location via the VCTK_ROOT env var, or edit
+the default below.
 """
 
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
 
-VCTK_ROOT = Path("/sec-cfs-nj/lukilu/SpeechDataset/vctk/wav48")
+VCTK_ROOT = Path(os.environ.get("VCTK_ROOT", "/path/to/vctk/wav48"))
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = REPO_ROOT / "data" / "manifests" / "vctk"
 

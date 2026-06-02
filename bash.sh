@@ -1,6 +1,6 @@
-export HF_HOME=/data/L202500019/huggingface
-source /data/L202500019/anaconda3/bin/activate /data/L202500019/anaconda3/envs/dynamic
-cd /data/L202500019/DynamicCodec
+export HF_HOME=/path/to/huggingface
+source /path/to/anaconda3/bin/activate /path/to/anaconda3/envs/dynamic
+cd /path/to/DynamicCodec
 export PYTHONPATH="$PWD:$PYTHONPATH"
 
 # inference

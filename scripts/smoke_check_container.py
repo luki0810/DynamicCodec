@@ -1,7 +1,7 @@
 """Smoke check that the container's environment matches what main.py / train.py
 expect. Invoked by scripts/setup_container.sh; safe to run on its own:
 
-    sudo docker exec dyc_luki python /app/scripts/smoke_check_container.py
+    sudo docker exec dyc_dev python /app/scripts/smoke_check_container.py
 """
 
 from __future__ import annotations

@@ -11,6 +11,9 @@ class MelSpectrogramFeatures(FeatureExtractor):
         if padding not in ["center", "same"]:
             raise ValueError("Padding must be 'center' or 'same'.")
         self.padding = padding
+        # expose hop_length so downstream code (build.py) can pad/trim mel
+        # frames even when no vocoder is attached.
+        self.hop_length = hop_length
         self.mel_spec = torchaudio.transforms.MelSpectrogram(
             sample_rate=sample_rate,
             n_fft=n_fft,

@@ -1,6 +1,9 @@
 input_channels: 768
 encode_channels: 1024
-code_dim: 128
+# code_dim must match the latent_dim picked up by quantizer/decoder. 1024
+# pairs cleanly with the default rvq + dac decoder; override to a smaller
+# value when you also override latent_dim everywhere else.
+code_dim: 1024
 channel_ratios: [1, 1]
 strides: [2, 2]
 kernel_size: 3

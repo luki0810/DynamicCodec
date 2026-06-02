@@ -1,4 +1,4 @@
-Vocoder.input_channels: 96
+Vocoder.input_channels: 100
 Vocoder.dim: 512
 Vocoder.intermediate_dim: 1536
 Vocoder.num_layers: 8

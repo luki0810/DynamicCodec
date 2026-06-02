@@ -22,7 +22,14 @@ cd DynamicCodec
 bash scripts/setup_container.sh
 ```
 
-镜像选择是自动的：能访问腾讯内网 `mirrors.tencent.com` 就直接拉 `facodec_lukilu:v1.2`；不能就 fallback 到本地构建 `dynamiccodec:local`（基于 Docker Hub 的 `pytorch/pytorch:2.6.0-cuda12.4`，首次约 10 分钟）。
+镜像选择是自动的：如果设置了 `DYC_INTERNAL_IMAGE` 环境变量并且能拉到该镜像，就直接用；否则 fallback 到本地构建 `dynamiccodec:local`（基于 Docker Hub 的 `pytorch/pytorch:2.6.0-cuda12.4`，首次约 10 分钟）。
+
+```bash
+# 可选：指定内网/私有镜像
+export DYC_INTERNAL_IMAGE=registry.example.com/team/dyc:v1
+# 可选：把宿主机上的数据盘挂进容器
+export DYC_DATA_MOUNT=/path/to/data
+```
 
 显式控制：
 
@@ -33,11 +40,11 @@ bash scripts/setup_container.sh --rm             # 销毁旧容器后重建
 bash scripts/setup_container.sh --help           # 看完整说明
 ```
 
-容器名固定为 `dyc_luki`，所有命令都通过 `docker exec` 进入：
+容器名固定为 `dyc_dev`，所有命令都通过 `docker exec` 进入：
 
 ```bash
-sudo docker exec -it dyc_luki bash       # 交互式
-sudo docker exec dyc_luki <command>      # 单条命令
+sudo docker exec -it dyc_dev bash       # 交互式
+sudo docker exec dyc_dev <command>      # 单条命令
 ```
 
 ### 2. 推理：用预置的 DAC checkpoint
@@ -53,7 +60,7 @@ state: inference
 跑推理：
 
 ```bash
-sudo docker exec dyc_luki bash -c \
+sudo docker exec dyc_dev bash -c \
   "cd /app && python main.py --conf_path conf/base.yaml --save_path runs/inference_dac --args.debug 1"
 ```
 
@@ -69,9 +76,9 @@ sudo docker exec dyc_luki bash -c \
 # 组件选择
 state: inference     # train / inference
 input_format: wav    # wav / melspec / repr
-encoder: dac         # dac / encodec / cosmos / mel / repcodec
+encoder: dac         # dac / encodec / mel / repcodec
 quantizer: rvq       # rvq / vq / bsq / fsq
-decoder: dac         # dac / encodec / cosmos / mel
+decoder: dac         # dac / encodec / mel
 vocoder: null        # null（不用）/ vocos
 ```
 
@@ -102,7 +109,11 @@ python scripts/build_vctk_manifest.py
 
 切分逻辑：所有 109 个 speaker 都参与训练（speaker-dependent），每个 speaker 内部按文件名排序后按 `idx % 50` 切（确定性，可复现）。
 
-> **VCTK 路径**：脚本默认读 `/sec-cfs-nj/lukilu/SpeechDataset/vctk/wav48/`（CFS，只读）。外部用户请改 `scripts/build_vctk_manifest.py` 里的 `VCTK_ROOT`。
+> **VCTK 路径**：通过环境变量 `VCTK_ROOT` 指向本地 VCTK `wav48` 目录，或直接修改 `scripts/build_vctk_manifest.py` 里的 `VCTK_ROOT` 默认值。
+>
+> ```bash
+> VCTK_ROOT=/path/to/vctk/wav48 python scripts/build_vctk_manifest.py
+> ```
 
 `conf/train/dataset.yaml` 已经指向这三个 CSV 的相对路径。
 
@@ -111,7 +122,7 @@ python scripts/build_vctk_manifest.py
 切到训练状态：`conf/base.yaml` 设 `state: train`。
 
 ```bash
-sudo docker exec dyc_luki bash -c \
+sudo docker exec dyc_dev bash -c \
   "cd /app && python train.py --conf_path conf/base.yaml --save_path runs/dac_run --args.debug 1"
 ```
 
@@ -140,7 +151,7 @@ latest/                   # 最新 checkpoint（同上结构）
 ### 多 GPU 训练
 
 ```bash
-sudo docker exec dyc_luki bash -c \
+sudo docker exec dyc_dev bash -c \
   "cd /app && torchrun --nproc_per_node gpu train.py --conf_path conf/base.yaml --save_path runs/dac_run --args.debug 1"
 ```
 
@@ -175,11 +186,17 @@ resume 路径 = `<save_path>/<tag>/`。
 
 | 类别 | 选项 |
 |------|------|
-| **Encoder**     | `dac`, `encodec`, `cosmos`, `mel`, `repcodec` |
-| **Decoder**     | `dac`, `encodec`, `cosmos`, `mel` |
-| **Quantizer**   | `rvq`（残差 VQ）, `vq`, `bsq`, `fsq` |
+| **Encoder**     | `dac`, `encodec`, `mel`, `repcodec`(SSL) |
+| **Decoder**     | `dac`, `encodec`, `mel` |
+| **Quantizer**   | `rvq`（残差 VQ）, `vq`, `bsq`, `fsq`（Finite Scalar Quantization） |
 | **Vocoder**     | `vocos`, `null`（不接 vocoder） |
 | **Input format**| `wav`, `melspec`, `repr`（SSL 特征） |
+
+仓库里的 `cosmos` 编/解码器是 NVIDIA Cosmos 图像 tokenizer（2D Conv），未适配 1D 音频，目前没注册到选择表里；代码保留在 `model/{encoder,decoder}/cosmos.py` 供未来 2D 实验用。
+
+`repr` + `repcodec` 走的是 SSL 特征路线，需要预下载 SSL checkpoint 到 `ckpt/<model_type>/...`（默认 `ckpt/data2vec/base_no_ft.pt`），并在容器里装好 `fairseq` / `openai-whisper`（`scripts/setup_container.sh` 已包含）。
+
+> 想确认所有组件是否健康，跑一遍 `python scripts/probe_components.py`：每个组合在独立子进程里随机初始化、跑一次 forward，几秒内出结果。
 
 ---
 
@@ -230,7 +247,7 @@ DynamicCodec/
 
 1. 检查 docker / sudo 权限；首次把当前用户加入 `docker` 组（下次登录生效）
 2. 选定镜像（必要时 build 公网 `dynamiccodec:local`）
-3. 复用或创建 `dyc_luki` 容器（挂载项目；host 上有 `/sec-cfs-nj` 时一并挂载）
+3. 复用或创建 `dyc_dev` 容器（挂载项目；如果设置了 `DYC_DATA_MOUNT` 会一并挂载）
 4. 装缺失的 pip 包：`descript-audiotools 0.7.2`、`argbind 0.3.9`、`vocos 0.1.0`、`typeguard`、`humanfriendly`
 5. 打 `argbind` 补丁（`parse_args(argv=...)` 支持显式 argv）
 6. 打 `audiotools` 补丁（兼容 PyTorch 2.6 默认 `weights_only=True`）
@@ -240,8 +257,8 @@ DynamicCodec/
 容器生命周期管理：
 
 ```bash
-sudo docker stop dyc_luki        # 停（保留状态）
-sudo docker start dyc_luki       # 重启
+sudo docker stop dyc_dev        # 停（保留状态）
+sudo docker start dyc_dev       # 重启
 bash scripts/setup_container.sh --rm   # 完全重置（pip + patch 会被脚本自动恢复）
 ```
 

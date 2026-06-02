@@ -1,0 +1,2 @@
+latent_dim: 1024
+FiniteScalarQuantize.levels: [8, 5, 5, 5]
