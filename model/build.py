@@ -144,6 +144,7 @@ class DynamicCodec(AbsConvCodec):
 
         raw_length = audio_data.shape[-1]  # 原始 wav 长度（samples）
 
+
         from data.melspec import MelSpectrogramFeatures
         # input: wav (no feature extractor)
         if self.feature_extractor is None:
@@ -184,15 +185,20 @@ class DynamicCodec(AbsConvCodec):
 
         # ssl input
         else:
-            length = raw_length
+            # 调用 SSL feature extractor 提取特征: (B, 1, T) -> (B, C, L)
+            ssl_feat = self.feature_extractor(audio_data)
+            if ssl_feat.dim() == 2:
+                ssl_feat = ssl_feat.unsqueeze(0)  # (C, L) -> (1, C, L)
+            feat_length = ssl_feat.shape[-1]
+            length = feat_length
             pad_info = {
                 "domain": "ssl",
                 "raw_length": raw_length,
                 "padded_raw_length": None,
-                "feat_length": None,
+                "feat_length": feat_length,
                 "padded_feat_length": None,
             }
-            return audio_data, length, pad_info
+            return ssl_feat, length, pad_info
 
     def encode(self, audio_data: torch.Tensor):
         z = self.encoder(audio_data)

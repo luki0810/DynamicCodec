@@ -1,5 +1,45 @@
+# ----- Project artifacts -----
 ckpt/
 runs/
-.vscode
-.env
+wav_file/output_recons/
+
+# ----- Unrelated upstream clones (not part of this project) -----
+nemo/
+
+# ----- Generated manifests -----
+# Re-create with: python scripts/build_vctk_manifest.py
+# (paths are baked to local CFS, not portable; cheaper to regenerate than to track)
+data/manifests/
+
+# ----- Python -----
 __pycache__/
+*.pyc
+*.egg-info/
+*.egg
+build/
+dist/
+
+# ----- Editor / IDE / OS -----
+.vscode
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# ----- Local secrets and per-user config -----
+.env
+.env.local
+.claude/settings.local.json
+.claude/status/
+
+# ----- Training NaN/anomaly snapshots -----
+anomaly_*.pth
+runs/**/anomaly_*.pth
+
+# ----- TensorBoard event files (also covered by runs/, kept explicit) -----
+events.out.tfevents.*
+*.tfevents.*
+
+# ----- Notebooks scratch -----
+.ipynb_checkpoints/

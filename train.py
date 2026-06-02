@@ -12,6 +12,7 @@ from audiotools.ml.decorators import Tracker, when, timer
 from torch.utils.tensorboard import SummaryWriter
 from audiotools.data.datasets import AudioDataset, AudioLoader, ConcatDataset
 from audiotools.data import transforms # audio data transform to tensor
+from model.utils.nan_inf_check import check_finite_or_fail
 
 
 import model
@@ -171,8 +172,6 @@ def load(
         # |-latest
         # ||-dynamiccodec
         # ||-dynamicdiscriminator
-        import pdb
-        pdb.set_trace()
         if (Path(kwargs["folder"]) / "dynamiccodec").exists():
             with argbind.scope(args):
                 generator, g_extra = DynamicTask.load_from_folder(**kwargs)
@@ -235,7 +234,7 @@ def load(
     )
     
 @timer()
-def train_loop(state, batch, accel, lambdas):
+def train_loop(state, batch, accel, lambdas, log_path):
     state.generator.train()
     state.discriminator.train()
     output = {}
@@ -258,6 +257,16 @@ def train_loop(state, batch, accel, lambdas):
         # ===============================================
     with accel.autocast():
         output["adv/disc_loss"] = state.gan_loss.discriminator_loss(recons, signal)
+
+    check_finite_or_fail(
+        {"adv/disc_loss": output["adv/disc_loss"]},
+        step=state.tracker.step,
+        accel=accel,
+        save_path=log_path,   # 见下方说明
+        tracker=state.tracker,
+        extra={"phase": "D", "lr_d": state.optimizer_d.param_groups[0]["lr"]},
+    )
+
 
     state.optimizer_d.zero_grad()
     accel.backward(output["adv/disc_loss"])
@@ -304,6 +313,20 @@ def train_loop(state, batch, accel, lambdas):
         output["loss"] = sum(weighted_terms)
         output["loss"] = output["loss"].mean() 
         # ===============================================
+
+        # 在 G backward 前检查：检查所有 output 中的 loss 项 + 总 loss
+        check_finite_or_fail(
+            {k: v for k, v in output.items() if "loss" in k},  # 包含 mel/stft/waveform/adv/vq/总loss
+            step=state.tracker.step,
+            accel=accel,
+            save_path=log_path,
+            tracker=state.tracker,
+            extra={
+                "phase": "G",
+                "lr_g": state.optimizer_g.param_groups[0]["lr"],
+                "lambdas": {k: float(w) for k, w in lambdas.items()},
+            },
+        )
 
     state.optimizer_g.zero_grad()
     accel.backward(output["loss"])
@@ -428,7 +451,7 @@ def train(
     args,
     accel: ml.Accelerator,
     seed: int = 0,
-    log_path: str = "ckpt", # in main
+    log_path: str = None, # in main
     num_iters: int = 250000,
     save_iters: list = [10000, 50000, 100000, 200000],
     sample_freq: int = 10000,
@@ -514,7 +537,7 @@ def train(
 
     with tracker.live:
         for tracker.step, batch in enumerate(train_dataloader, start=tracker.step):
-            train_loop(state, batch, accel, lambdas)
+            train_loop(state, batch, accel, lambdas, log_path)
 
             last_iter = (
                 tracker.step == num_iters - 1 if num_iters is not None else False

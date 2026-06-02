@@ -8,8 +8,8 @@ $include:
 
 # train.py def load()
 # without_prefix = false
-load.resume: true
-load.tag: latest
+load.resume: false
+load.tag: best
 load.only_load_weights: true
 
 
