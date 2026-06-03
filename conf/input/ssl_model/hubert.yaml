@@ -1,4 +1,6 @@
-# hubert
+# HuBERT-large (LL60k): 1024-dim transformer encoder, 24 layers.
 ssl_model.model_type: hubert
 ssl_model.ckpt_path: ckpt/hubert/hubert_large_ll60k.pt
 ssl_model.layer: 18
+# repcodec encoder input dim must match SSL hidden dim.
+input_channels: 1024

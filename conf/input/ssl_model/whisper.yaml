@@ -1,5 +1,7 @@
-# whisper input should be 16kHz
+# Whisper medium encoder: 1024-dim, 24 layers. Input is 16kHz mel-padded audio.
 ssl_model.model_type: whisper
 ssl_model.whisper_root: ckpt/whisper
 ssl_model.whisper_name: medium
 ssl_model.layer: 24
+# repcodec encoder input dim must match Whisper encoder hidden dim.
+input_channels: 1024

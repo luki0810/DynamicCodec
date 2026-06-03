@@ -234,6 +234,7 @@ echo "  done"
 step 6/8 "apply patches"
 $DK exec "$NAME" python /app/scripts/patch_argbind.py
 $DK exec "$NAME" python /app/scripts/patch_audiotools_torchload.py
+$DK exec "$NAME" python /app/scripts/patch_fairseq_torchload.py
 
 step 7/8 "smoke check"
 $DK exec "$NAME" python /app/scripts/smoke_check_container.py

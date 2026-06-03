@@ -1,10 +1,14 @@
 $include:
   - conf/&{state}.yaml
-  - conf/input/&{input_format}.yaml
   - conf/model/encoder/&{encoder}.yaml
   - conf/model/decoder/&{decoder}.yaml
   - conf/model/quantizer/&{quantizer}.yaml
   - conf/model/vocoder/&{vocoder}.yaml # TODO
+  # input format last so backbone-specific hints (e.g. SSL hidden dim →
+  # repcodec.input_channels via ssl_model/<type>.yaml) override encoder-yaml
+  # defaults. The ssl_model yaml is the right place for "this backbone has
+  # 1024-dim hidden states" information.
+  - conf/input/&{input_format}.yaml
 
 
 
