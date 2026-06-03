@@ -563,7 +563,12 @@ def main(conf_path: str = None, save_path: str = None):
     cfg = load_config_for_argbind(main_yaml=conf_path)
     args = argbind.parse_args(argv=sys.argv)
     args.update(cfg)
-    
+
+    # log component selection up front (mirrors main.py); prints on rank 0 only
+    if int(os.getenv("LOCAL_RANK", 0)) == 0:
+        from model.utils.logger import log_components
+        log_components(args)
+
     # Set debug mode if LOCAL_RANK is 0
     args["args.debug"] = int(os.getenv("LOCAL_RANK", 0)) == 0
     with argbind.scope(args):

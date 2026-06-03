@@ -11,7 +11,7 @@ import soundfile
 from model.utils.util import pretty_shape
 from model.build import DynamicTask
 from model.utils.dynamic_argbind_loader import load_config_for_argbind
-from model.utils.logger import logger
+from model.utils.logger import logger, log_components
 
 
 
@@ -56,10 +56,13 @@ def main(conf_path: str = None, save_path: str = None):
     args = argbind.parse_args(argv=sys.argv)
     args.update(cfg)
     argpath = Path(save_path)/ "args.yaml"
-    _dump_args(args=args, save_path=argpath) 
+    _dump_args(args=args, save_path=argpath)
     # 可以到save_path查看当前使用的args.yaml
     # 复现可以直接使用 --conf_path ${save_path}/args.yaml
-  
+
+    # log component selection up front so it's visible regardless of resume path
+    log_components(args)
+
     # seed
     seed = args['seed']
     torch.manual_seed(seed)
