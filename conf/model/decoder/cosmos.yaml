@@ -1,10 +1,11 @@
+# Mirror of conf/model/encoder/cosmos.yaml — keep the two in sync.
 out_channels: 1
 channels: 128
 channels_mult: [2, 4, 4]
 num_res_blocks: 2
-attn_resolutions: [6, 12]
+attn_resolutions: [13, 26]
 dropout: 0.0
-resolution: 96
+resolution: 104
 z_channels: 256
 spatial_compression: 8
 embedding_dim: 1024

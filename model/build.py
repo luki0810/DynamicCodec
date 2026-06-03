@@ -168,26 +168,52 @@ class DynamicCodec(AbsConvCodec):
         # mel input (wav -> mel -> pad in mel domain)
         elif isinstance(self.feature_extractor, MelSpectrogramFeatures):
             mel = self.feature_extractor(audio_data)  # (B, n_mels, L)
-            # Pad to a hop multiple. When a vocoder is attached we use its
-            # hop_length (so its inverse STFT lines up); otherwise fall back to
-            # the mel extractor's own hop_length (mel-domain reconstruction).
+            n_mels_orig = mel.shape[-2]
+
+            # 2D encoders (e.g. cosmos) treat (n_mels, T) as an image and need
+            # n_mels padded up to `encoder.resolution` (a multiple of
+            # `spatial_compression`). 1D mel encoders don't expose `resolution`
+            # and stay on the no-pad path.
+            target_n_mels = getattr(self.encoder, "resolution", None)
+            if target_n_mels is not None and target_n_mels > n_mels_orig:
+                pad_h = target_n_mels - n_mels_orig
+                # F.pad on (B, n_mels, T): (left_w, right_w, left_h, right_h)
+                mel = F.pad(mel, (0, 0, 0, pad_h))
+            elif target_n_mels is not None and target_n_mels < n_mels_orig:
+                raise ValueError(
+                    f"encoder.resolution={target_n_mels} < n_mels={n_mels_orig}; "
+                    "raise resolution in conf/model/encoder/<name>.yaml or lower n_mels."
+                )
+
+            # Pad to a hop multiple along time. When a vocoder is attached we use
+            # its hop_length (so its inverse STFT lines up); otherwise fall back
+            # to the mel extractor's own hop_length (mel-domain reconstruction).
             hop = (
                 self.vocoder.hop_length
                 if self.vocoder is not None
                 else self.feature_extractor.hop_length
             )
+            # 2D encoders also compress the time axis by `spatial_compression`.
+            # When that doesn't already divide `hop`, expand to lcm so both
+            # constraints are satisfied with one padding pass.
+            sc = getattr(self.encoder, "spatial_compression", 1)
+            if sc > 1 and hop % sc != 0:
+                from math import gcd
+                hop = hop * sc // gcd(hop, sc)
             mel, feat_length = right_pad_to_multiple(mel, hop, dim=-1)
 
-            # 这里 length 对于“无 vocoder，仅重建 mel”时，裁剪回原始 mel 帧长
+            # 这里 length 对于"无 vocoder，仅重建 mel"时，裁剪回原始 mel 帧长
             # 但如果你有 vocoder，并且最终输出 wav，我们仍然要裁 raw_length
             length = feat_length
 
             pad_info = {
                 "domain": "mel",
                 "raw_length": raw_length,
-                "padded_raw_length": None,          
+                "padded_raw_length": None,
                 "feat_length": feat_length,
                 "padded_feat_length": mel.shape[-1], # pad 后的 mel 帧长
+                "n_mels_orig": n_mels_orig,
+                "n_mels_padded": mel.shape[-2] if target_n_mels is not None else None,
             }
             return mel, length, pad_info
 
@@ -217,6 +243,8 @@ class DynamicCodec(AbsConvCodec):
 
     def decode(self, z: torch.Tensor):
         # z.shape (B, C, T)
+        # NOTE: this public path does NOT crop the n_mels axis; cosmos+mel
+        # callers should go through forward() which uses pad_info to crop.
         z_hat = self.decoder(z)
         if self.vocoder is not None:
             z_hat = self.vocoder.decode(z_hat)
@@ -230,7 +258,26 @@ class DynamicCodec(AbsConvCodec):
         x_pad, length, pad_info = self.preprocess(audio_data, sample_rate)
 
         z, codes, latents, loss_dict, other = self.encode(x_pad)
-        x_hat = self.decode(z)
+
+        # ---- decoder + optional vocoder ----
+        # We split the .decode() call so we can crop the n_mels axis between
+        # decoder and vocoder when a 2D mel encoder (cosmos) padded it.
+        feat_hat = self.decoder(z)
+
+        # Crop n_mels back to the original. 2D-image decoders (cosmos) emit
+        # (B, resolution, T) which is wider than the canonical n_mels; the
+        # vocoder / mel-domain loss expects the canonical width.
+        n_mels_orig = pad_info.get("n_mels_orig") if pad_info.get("domain") == "mel" else None
+        n_mels_padded = pad_info.get("n_mels_padded") if pad_info.get("domain") == "mel" else None
+        if n_mels_padded is not None and feat_hat.dim() == 3 and feat_hat.shape[-2] > n_mels_orig:
+            feat_hat = feat_hat[..., :n_mels_orig, :]
+
+        if self.vocoder is not None:
+            x_hat = self.vocoder.decode(feat_hat)
+            if x_hat.dim() == 2:
+                x_hat = x_hat.unsqueeze(1)
+        else:
+            x_hat = feat_hat
 
         # ---------- length alignment ----------
         if self.vocoder is not None:

@@ -30,6 +30,12 @@ class Decoder(AbsDecoder):
         self.num_resolutions = len(channels_mult)
         self.num_res_blocks = num_res_blocks
 
+        # Mirror the encoder's shape contract (DynamicCodec uses these to
+        # decide pad-on-entry / crop-on-exit for the n_mels axis).
+        self.resolution = resolution
+        self.spatial_compression = spatial_compression
+        self.p_size = p_size
+
         # 与 Encoder: num_downsamples = log2(spatial_compression) - log2(patch_size)
         self.num_upsamples = int(math.log2(spatial_compression)) - int(math.log2(p_size))
         assert self.num_upsamples <= self.num_resolutions, \

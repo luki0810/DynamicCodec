@@ -31,6 +31,13 @@ class Encoder(AbsEncoder):
         self.num_resolutions = len(channels_mult)
         self.num_res_blocks = num_res_blocks
 
+        # Expose shape contract so DynamicCodec.preprocess can pad mel n_mels
+        # to a 2D-compatible size (multiple of spatial_compression, ≤ resolution)
+        # and crop back the decoder output to the original n_mels.
+        self.resolution = resolution
+        self.spatial_compression = spatial_compression
+        self.p_size = p_size
+
         # Patcher.
         self.patcher = Patcher(
             p_size, p_method

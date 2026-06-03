@@ -1,12 +1,19 @@
-  in_channels: 1
-  channels: 128
-  channels_mult: [2, 4, 4]
-  num_res_blocks: 2
-  attn_resolutions: [6, 12]
-  dropout: 0.0
-  resolution: 96
-  z_channels: 256
-  spatial_compression: 8
-  embedding_dim: 1024
-  p_size: 2
-  p_method: haar
+# Cosmos 2D image-tokenizer encoder, used here as a mel-domain codec.
+# DynamicCodec.preprocess pads the n_mels axis to `resolution` (which must be
+# >= n_mels and a multiple of spatial_compression) and crops back at the end.
+# resolution=104 matches the project default n_mels=100 (next multiple of 8).
+# attn_resolutions are picked at the deeper levels for resolution=104:
+#   curr_res after Patcher(p=2) = 52  → 26 → 13.
+# So [13, 26] fires attn at the bottom + middle. Adjust if you change resolution.
+in_channels: 1
+channels: 128
+channels_mult: [2, 4, 4]
+num_res_blocks: 2
+attn_resolutions: [13, 26]
+dropout: 0.0
+resolution: 104
+z_channels: 256
+spatial_compression: 8
+embedding_dim: 1024
+p_size: 2
+p_method: haar

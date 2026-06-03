@@ -15,13 +15,12 @@ from model.decoder.encodec import Decoder as encodec_Decoder
 from model.encoder.repcodec import Encoder as repcodec_Encoder
 from model.encoder.mel import Encoder as mel_Encoder
 from model.decoder.mel import Decoder as mel_Decoder
-# NOTE: cosmos uses Conv2d (image tokenizer); not yet adapted to 1D audio,
-# so it's intentionally NOT registered in encoder_choices / decoder_choices.
-# Source files kept in tree under model/{encoder,decoder}/cosmos.py for
-# future 2D experiments; do not select it via conf/base.yaml until the
-# adapter (e.g. mel-as-image reshape) is implemented in model/build.py.
-# from model.encoder.cosmos import Encoder as cosmos_Encoder
-# from model.decoder.cosmos import Decoder as cosmos_Decoder
+# cosmos: 2D Conv image-style codec, used as a melspec encoder/decoder
+# (n_mels × time treated as image H × W). DynamicCodec.preprocess pads the
+# n_mels axis to a multiple of `spatial_compression` and crops back on the
+# decoder output, so any n_mels works transparently — see model/build.py.
+from model.encoder.cosmos import Encoder as cosmos_Encoder
+from model.decoder.cosmos import Decoder as cosmos_Decoder
 
 # Vocoder import
 from model.vocoder.voco_istft import Vocoder as Vocos
@@ -39,6 +38,7 @@ encoder_choices = ClassChoices(
         encodec=encodec_Encoder,
         repcodec=repcodec_Encoder,
         mel = mel_Encoder,
+        cosmos = cosmos_Encoder,
     ),
     type_check=AbsEncoder,
     default="default",
@@ -64,6 +64,7 @@ decoder_choices = ClassChoices(
         dac=dac_Decoder,
         encodec=encodec_Decoder,
         mel = mel_Decoder,
+        cosmos = cosmos_Decoder,
     ),
     type_check=AbsDecoder,
     default="default",
