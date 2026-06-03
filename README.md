@@ -186,15 +186,25 @@ resume 路径 = `<save_path>/<tag>/`。
 
 | 类别 | 选项 |
 |------|------|
-| **Encoder**     | `dac`, `encodec`, `mel`, `repcodec`(SSL) |
-| **Decoder**     | `dac`, `encodec`, `mel` |
+| **Encoder**     | `dac`, `encodec`, `mel`, `cosmos`(2D, melspec), `repcodec`(SSL) |
+| **Decoder**     | `dac`, `encodec`, `mel`, `cosmos`(2D, melspec) |
 | **Quantizer**   | `rvq`（残差 VQ）, `vq`, `bsq`, `fsq`（Finite Scalar Quantization） |
 | **Vocoder**     | `vocos`, `null`（不接 vocoder） |
 | **Input format**| `wav`, `melspec`, `repr`（SSL 特征） |
 
-仓库里的 `cosmos` 编/解码器是 NVIDIA Cosmos 图像 tokenizer（2D Conv），未适配 1D 音频，目前没注册到选择表里；代码保留在 `model/{encoder,decoder}/cosmos.py` 供未来 2D 实验用。
+`cosmos` 是 NVIDIA Cosmos 图像 tokenizer（Conv2d），仅在 `input_format: melspec` 下生效——把 `(n_mels, T)` 当作 2D image 处理。`DynamicCodec.preprocess` 会自动按 `cosmos.yaml` 的 `resolution`（默认 104，是 `spatial_compression=8` 的整数倍且 ≥ 默认 `n_mels=100`）把 mel 的 n_mels 轴 pad 上去，在 decoder 输出后再 crop 回原始 n_mels，所以**无需手动调 mel_model.n_mels**。改 `n_mels` 时同步把 `cosmos.yaml` 的 `resolution` 调到 ≥n_mels 且是 `spatial_compression` 倍数的最小值即可。
 
-`repr` + `repcodec` 走的是 SSL 特征路线，需要预下载 SSL checkpoint 到 `ckpt/<model_type>/...`（默认 `ckpt/data2vec/base_no_ft.pt`），并在容器里装好 `fairseq` / `openai-whisper`（`scripts/setup_container.sh` 已包含）。
+`repr` + `repcodec` 走的是 SSL 特征路线，需要预下载 SSL checkpoint 到 `ckpt/<model_type>/...`：
+
+| backbone | ckpt 路径 | 隐层维度 | 推荐 layer |
+|----------|-----------|----------|-----------|
+| `data2vec` | `ckpt/data2vec/base_no_ft.pt` | 768 | 6 |
+| `hubert` | `ckpt/hubert/hubert_large_ll60k.pt` | 1024 | 18 |
+| `whisper` | `ckpt/whisper/medium.pt` | 1024 | 24 |
+
+切 backbone 改 `conf/input/repr.yaml` 的 `ssl_model_type`（`hubert` / `whisper` / `data2vec`）。每个 `conf/input/ssl_model/<type>.yaml` 同时声明 `input_channels`（=隐层维度），通过 `conf/base.yaml` 的 include 顺序（input 在最后）覆盖 `repcodec.yaml` 的默认值——所以**换 backbone 不需要手动调 encoder dim**。
+
+容器里需要装好 `fairseq` / `openai-whisper`（`scripts/setup_container.sh` 已包含）。如果在容器里看到 `UnpicklingError: Weights only load failed`，说明 `scripts/patch_fairseq_torchload.py` 没跑——重新执行 `bash scripts/setup_container.sh` 就会幂等地把这个 patch 打上。
 
 > 想确认所有组件是否健康，跑一遍 `python scripts/probe_components.py`：每个组合在独立子进程里随机初始化、跑一次 forward，几秒内出结果。
 

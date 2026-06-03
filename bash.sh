@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DynamicCodec — 8 component combinations, run reference.
+# DynamicCodec — component combinations, run reference.
 #
 # 原始用法是改 conf/base.yaml 的 5 个字段（state / input_format / encoder /
 # quantizer / decoder / vocoder），然后跑一条 python 命令。下面每个组合给出
@@ -99,18 +99,66 @@ sudo docker exec $CTR bash -c \
   "cd /app && python main.py --conf_path conf/base.yaml --save_path runs/mel_rvq_vocos --args.debug 1"
 
 # ==============================================================================
-# 8) repcodec-rvq      repr + repcodec + rvq + dac    (SSL features → codec)
+# 8a) repcodec-rvq-data2vec   repr + repcodec + rvq + dac   (SSL=data2vec, 768-dim)
 # ==============================================================================
-# 需要先把 SSL ckpt 放到 ckpt/data2vec/base_no_ft.pt（对应 conf/input/ssl_model/data2vec.yaml）
+# 需要先放好 ckpt/data2vec/base_no_ft.pt（1.4GB）。
 # conf/base.yaml:
 #   input_format: repr
 #   encoder: repcodec
 #   quantizer: rvq
 #   decoder: dac
 #   vocoder: null
+# conf/input/repr.yaml:    ssl_model_type: data2vec
+# conf/inference.yaml:     resume: false
+sudo docker exec $CTR bash -c \
+  "cd /app && python main.py --conf_path conf/base.yaml --save_path runs/repcodec_rvq_data2vec --args.debug 1"
+
+# ==============================================================================
+# 8b) repcodec-rvq-hubert     repr + repcodec + rvq + dac   (SSL=hubert, 1024-dim)
+# ==============================================================================
+# 需要先放好 ckpt/hubert/hubert_large_ll60k.pt（3.8GB）。
+# conf/base.yaml:
+#   input_format: repr
+#   encoder: repcodec
+#   quantizer: rvq
+#   decoder: dac
+#   vocoder: null
+# conf/input/repr.yaml:    ssl_model_type: hubert
+# conf/inference.yaml:     resume: false
+sudo docker exec $CTR bash -c \
+  "cd /app && python main.py --conf_path conf/base.yaml --save_path runs/repcodec_rvq_hubert --args.debug 1"
+
+# ==============================================================================
+# 8c) repcodec-rvq-whisper    repr + repcodec + rvq + dac   (SSL=whisper, 1024-dim)
+# ==============================================================================
+# 需要先放好 ckpt/whisper/medium.pt（1.5GB）。Whisper encoder 输入要求 16kHz，
+# 单条推理 audio 的 sample_rate 由 conf/inference.yaml 控制。
+# conf/base.yaml:
+#   input_format: repr
+#   encoder: repcodec
+#   quantizer: rvq
+#   decoder: dac
+#   vocoder: null
+# conf/input/repr.yaml:    ssl_model_type: whisper
+# conf/inference.yaml:     resume: false
+sudo docker exec $CTR bash -c \
+  "cd /app && python main.py --conf_path conf/base.yaml --save_path runs/repcodec_rvq_whisper --args.debug 1"
+
+# ==============================================================================
+# 9) mel-cosmos-rvq    melspec + cosmos + rvq + cosmos    (2D image-style mel codec)
+# ==============================================================================
+# cosmos 把 (n_mels, T) 当作 2D image 处理（Conv2d）。DynamicCodec.preprocess
+# 会自动把 n_mels 从 100 pad 到 cosmos.yaml 里的 resolution=104，并在 decoder
+# 输出后 crop 回 100，所以无需改 mel_model.n_mels。
+# conf/base.yaml:
+#   input_format: melspec
+#   encoder: cosmos
+#   quantizer: rvq
+#   decoder: cosmos
+#   vocoder: null     # 也可以用 vocos 让最终输出回到 wav 域
 # conf/inference.yaml: resume: false
 sudo docker exec $CTR bash -c \
-  "cd /app && python main.py --conf_path conf/base.yaml --save_path runs/repcodec_rvq --args.debug 1"
+  "cd /app && python main.py --conf_path conf/base.yaml --save_path runs/mel_cosmos_rvq --args.debug 1"
 
 
 # ==============================================================================

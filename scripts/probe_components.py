@@ -30,12 +30,18 @@ COMBOS = [
     # mel path (CPU is slow, give it more time)
     ("melspec", "mel", "rvq", "mel", None),
     ("melspec", "mel", "rvq", "mel", "vocos"),
+    # 2D image-style mel codec (cosmos): n_mels axis padded to multiple of
+    # spatial_compression internally by DynamicCodec.
+    ("melspec", "cosmos", "rvq", "cosmos", None),
+    ("melspec", "cosmos", "rvq", "cosmos", "vocos"),
     # ssl repr path — requires SSL checkpoint at ckpt/{data2vec,hubert,whisper}/...
     # Probe will report whether it can at least import + resolve config; the
     # actual model load fails at probe time without those checkpoints.
-    ("repr", "repcodec", "rvq", "dac", None),
-    # cosmos is intentionally NOT registered (image-only, see model/all_choices.py)
-    # and therefore not probed here.
+    # ssl_model_type is read from conf/input/ssl_model/<type>.yaml; the probe
+    # forces it explicitly via args so we can sweep all three SSL backbones.
+    ("repr", "repcodec", "rvq", "dac", None, "data2vec"),
+    ("repr", "repcodec", "rvq", "dac", None, "hubert"),
+    ("repr", "repcodec", "rvq", "dac", None, "whisper"),
 ]
 
 
@@ -50,16 +56,24 @@ from model.utils.dynamic_argbind_loader import load_config_for_argbind
 
 input_format, encoder, quantizer, decoder, vocoder = sys.argv[1:6]
 vocoder = None if vocoder == "None" else vocoder
+ssl_model_type = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else None
 
 args = {}
+# Match conf/base.yaml include order: encoder/decoder/quantizer/vocoder first,
+# input format last so backbone-specific dims (e.g. SSL hidden dim →
+# repcodec.input_channels via ssl_model/<type>.yaml) override encoder defaults.
 yamls = [
-    f"conf/input/{input_format}.yaml",
     f"conf/model/encoder/{encoder}.yaml",
     f"conf/model/decoder/{decoder}.yaml",
     f"conf/model/quantizer/{quantizer}.yaml",
 ]
 if vocoder is not None:
     yamls.append(f"conf/model/vocoder/{vocoder}.yaml")
+yamls.append(f"conf/input/{input_format}.yaml")
+# repr.yaml templates an inner include via &{ssl_model_type}; honor the override
+# by appending the chosen ssl_model yaml explicitly so its keys win the merge.
+if input_format == "repr" and ssl_model_type:
+    yamls.append(f"conf/input/ssl_model/{ssl_model_type}.yaml")
 for y in yamls:
     args.update(load_config_for_argbind(main_yaml=y))
 args["input_format"] = input_format
@@ -67,11 +81,10 @@ args["encoder"] = encoder
 args["quantizer"] = quantizer
 args["decoder"] = decoder
 args["vocoder"] = vocoder
-args.setdefault("sample_rate", 48000)
-# probe runs on CPU; force any SSL feature extractor to CPU too so its
-# weights live on the same device as our random input tensor.
-args["ssl_model.device"] = "cpu"
-args["device"] = "cpu"
+if ssl_model_type:
+    args["ssl_model_type"] = ssl_model_type
+# Whisper / hubert / data2vec all expect 16k audio; other paths default to 48k.
+args.setdefault("sample_rate", 16000 if input_format == "repr" else 48000)
 # probe runs on CPU; force any SSL feature extractor to CPU too so its
 # weights live on the same device as our random input tensor.
 args["ssl_model.device"] = "cpu"
@@ -96,11 +109,16 @@ except Exception as e:
 
 
 def probe(combo):
-    if_, e, q, d, v = combo
-    label = f"{if_:>7} | {e:>8} + {q:>4} + {d:>8} + voc={v}"
+    if_, e, q, d, v = combo[:5]
+    ssl = combo[5] if len(combo) > 5 else None
+    label_suffix = f" | ssl={ssl}" if ssl else ""
+    label = f"{if_:>7} | {e:>8} + {q:>4} + {d:>8} + voc={v}{label_suffix}"
     cmd = ["python", "-c", WORKER, if_, e, q, d, "None" if v is None else v]
-    # mel-based combos do a lot of conv work on CPU; give them more headroom
-    timeout_s = 300 if e == "mel" else 120
+    if ssl:
+        cmd.append(ssl)
+    # mel-based combos do a lot of conv work on CPU; give them more headroom.
+    # SSL backbones load multi-GB ckpts on first import → also slow on CPU.
+    timeout_s = 600 if e == "repcodec" else 300 if e in ("mel", "cosmos") else 120
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
         for line in r.stdout.splitlines():
